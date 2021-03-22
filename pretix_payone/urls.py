@@ -8,12 +8,6 @@ event_patterns = [
         r"^_payone/",
         include(
             [
-                event_url(
-                    r"^webhook/(?P<payment>[0-9]+)/$",
-                    WebhookView.as_view(),
-                    name="webhook",
-                    require_live=False,
-                ),
                 url(r"^redirect/$", redirect_view, name="redirect"),
                 url(
                     r"^return/(?P<order>[^/]+)/(?P<hash>[^/]+)/(?P<payment>[0-9]+)/(?P<action>[a-z]+)/$",
@@ -23,4 +17,7 @@ event_patterns = [
             ]
         ),
     ),
+]
+urlpatterns = [
+    url(r"^_payone/status/$", WebhookView.as_view(), name="webhook"),
 ]

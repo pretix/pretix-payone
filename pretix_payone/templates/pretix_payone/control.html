@@ -6,10 +6,6 @@
             <dt>{% trans "Transaction ID" %}</dt>
             <dd>{{ payment_info.TxId }}</dd>
         {% endif %}
-        {% if "Status" in payment_info %}
-            <dt>{% trans "Status" %}</dt>
-            <dd>{{ payment_info.Status }}</dd>
-        {% endif %}
         {% if "Mandate" in payment_info %}
             <dt>{% trans "Mandate ID" %}</dt>
             <dd>{{ payment_info.Mandate.Identification }}</dd>

@@ -1,10 +1,12 @@
 import hashlib
 import json
 import logging
-import requests
 from decimal import Decimal
+
 from django.contrib import messages
 from django.core import signing
+from django.db import transaction
+from django.db.models import Sum
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
@@ -13,12 +15,11 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.csrf import csrf_exempt
-from pretix.base.models import Order, OrderPayment, Quota
+from pretix_payone.models import ReferencedPayoneObject
+
+from pretix.base.models import Order, OrderPayment, OrderRefund, Quota
 from pretix.base.payment import PaymentException
-from pretix.base.services.locking import LockTimeoutException
 from pretix.multidomain.urlreverse import eventreverse
-from pretix_mollie.utils import refresh_mollie_token
-from requests import HTTPError
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +48,15 @@ class PayoneOrderView:
         try:
             self.order = request.event.orders.get(code=kwargs["order"])
             if (
-                hashlib.sha1(self.order.secret.lower().encode()).hexdigest()
-                != kwargs["hash"].lower()
+                    hashlib.sha1(self.order.secret.lower().encode()).hexdigest()
+                    != kwargs["hash"].lower()
             ):
                 raise Http404("")
         except Order.DoesNotExist:
             # Do a hash comparison as well to harden timing attacks
             if (
-                "abcdefghijklmnopq".lower()
-                == hashlib.sha1("abcdefghijklmnopq".encode()).hexdigest()
+                    "abcdefghijklmnopq".lower()
+                    == hashlib.sha1("abcdefghijklmnopq".encode()).hexdigest()
             ):
                 raise Http404("")
             else:
@@ -78,8 +79,35 @@ class PayoneOrderView:
 @method_decorator(xframe_options_exempt, "dispatch")
 class ReturnView(PayoneOrderView, View):
     def get(self, request, *args, **kwargs):
-        # TODO
-        ...
+        if kwargs['action'] == 'error':
+            with transaction.atomic():
+                p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
+                if p.state == OrderPayment.PAYMENT_STATE_CREATED:
+                    self.payment.fail()
+            raise PaymentException(
+                _(
+                    "The payment process has failed. See below for more information."
+                )
+            )
+        elif kwargs['action'] == 'cancel':
+            with transaction.atomic():
+                p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
+                if p.state == OrderPayment.PAYMENT_STATE_CREATED:
+                    self.payment.state = OrderPayment.PAYMENT_STATE_CANCELED
+                    self.payment.save(update_fields=['state'])
+                    self.payment.order.log_action('pretix.event.order.payment.canceled', {
+                        'local_id': self.payment.local_id,
+                        'provider': self.payment.provider,
+                        'data': self.payment.info_data
+                    })
+            return self._redirect_to_order()
+        elif kwargs['action'] == 'success':
+            with transaction.atomic():
+                p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
+                if p.state == OrderPayment.PAYMENT_STATE_CREATED:
+                    p.state = OrderPayment.PAYMENT_STATE_PENDING
+                    p.save(update_fields=['state'])
+            return self._redirect_to_order()
 
     def _redirect_to_order(self):
         if self.request.session.get("payment_payone_order_secret") != self.order.secret:
@@ -105,8 +133,47 @@ class ReturnView(PayoneOrderView, View):
 @method_decorator(csrf_exempt, "dispatch")
 class WebhookView(View):
     def post(self, request, *args, **kwargs):
-        ...  # todo
-        return HttpResponse(status=200)
+        try:
+            r = ReferencedPayoneObject.objects.get(txid=request.POST.get('txid'))
+        except ReferencedPayoneObject.DoesNotExist:
+            return HttpResponse(status=409)
+
+        pprov = r.payment.payment_provider
+        if hashlib.md5(pprov.settings.key.encode()).hexdigest() != request.POST.get('key'):
+            return HttpResponse('Invalid key', status=403)
+
+        if pprov.settings.aid != request.POST.get('aid'):
+            return HttpResponse('Invalid AID', status=403)
+
+        if pprov.settings.portalid != request.POST.get('portalid'):
+            return HttpResponse('Invalid Portal ID', status=403)
+
+        if request.POST.get('mode') == 'test' and not r.order.testmode:
+            return HttpResponse('Invalid testmode usage', status=403)
+
+        data = {k: request.POST.get(k) for k in request.POST.keys() if k not in ('key')}
+
+        r.order.log_action(f'pretix_payone.event.{data["txaction"]}', data={
+            'local_id': r.payment.local_id,
+            'provider': r.payment.provider,
+            'data': data
+        })
+        balance = None
+        if "balance" in data:
+            data["balance"] = Decimal(data["balance"])
+
+        if data["txaction"] in ('capture', 'paid', 'appointed'):
+            if r.payment.state not in (OrderPayment.PAYMENT_STATE_CONFIRMED, OrderPayment.PAYMENT_STATE_REFUNDED) and balance is not None and balance <= Decimal('0.00'):
+                try:
+                    r.payment.confirm()
+                except Quota.QuotaExceededException:
+                    pass
+        elif data["txaction"] == 'refund':
+            existing_refund_amount = r.payment.refunds.exclude(state__in=(OrderRefund.REFUND_STATE_CANCELED, OrderRefund.REFUND_STATE_FAILED)).aggregate(a=Sum('amount'))['a'] or Decimal('0.00')
+            new_refund_amount = r.payment.amount - data["receivable"]
+            if new_refund_amount > existing_refund_amount:
+                r.payment.create_external_refund(new_refund_amount - existing_refund_amount, info=json.encode(data))
+        return HttpResponse('TSOK', status=200)
 
     @cached_property
     def payment(self):

@@ -2,28 +2,26 @@ import hashlib
 import json
 import logging
 import requests
-import textwrap
 import urllib.parse
 from collections import OrderedDict
-from datetime import timedelta
 from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.core import signing
-from django.db import transaction
 from django.http import HttpRequest
 from django.template.loader import get_template
-from django.utils.translation import gettext_lazy as _, get_language
-from i18nfield.strings import LazyI18nString
+from django.utils.translation import get_language, gettext_lazy as _
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
 from pretix.base.forms.questions import guess_country
-from pretix.base.models import Event, InvoiceAddress, Order, OrderPayment, OrderRefund
+from pretix.base.models import Event, InvoiceAddress, OrderPayment, OrderRefund
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
+from pretix.helpers.urls import build_absolute_uri as build_global_uri
 from pretix.multidomain.urlreverse import build_absolute_uri
-from pretix_mollie.utils import refresh_mollie_token
 from requests import HTTPError
+
+from pretix_payone.models import ReferencedPayoneObject
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +81,7 @@ class PayoneSettingsHolder(BasePaymentProvider):
             ("giropay", _("giropay")),
             ("sepadebit", _("SEPA direct debit")),
             ("paypal", _("PayPal")),
+            ("eps", _("eps")),
             # more: https://docs.payone.com/display/public/PLATFORM/General+information
         ]
         d = OrderedDict(
@@ -95,6 +94,16 @@ class PayoneSettingsHolder(BasePaymentProvider):
         )
         d.move_to_end("_enabled", last=False)
         return d
+
+    def settings_content_render(self, request):
+        return "<div class='alert alert-info'>%s<br /><code>%s</code></div>" % (
+            _(
+                "Please configure the TransactionStatus URL to "
+                "the following endpoint in order to automatically cancel orders when charges are refunded externally "
+                "and to process asynchronous payment methods like SOFORT."
+            ),
+            build_global_uri("plugins:pretix_payone:webhook"),
+        )
 
 
 class PayoneMethod(BasePaymentProvider):
@@ -336,7 +345,10 @@ class PayoneMethod(BasePaymentProvider):
         return d
 
     def execute_payment(self, request: HttpRequest, payment: OrderPayment):
-        data = dict(**self._get_payment_params(request, payment), **self._default_params)
+        data = dict(
+            **self._get_payment_params(request, payment), **self._default_params
+        )
+        print(data)
         try:
             req = requests.post(
                 "https://api.pay1.de/post-gateway/",
@@ -363,6 +375,13 @@ class PayoneMethod(BasePaymentProvider):
         payment.info = json.dumps(data)
         payment.state = OrderPayment.PAYMENT_STATE_CREATED
         payment.save()
+
+        if "TxId" in data:
+            ReferencedPayoneObject.objects.get_or_create(
+                txid=data["TxId"],
+                payment=payment,
+                order=payment.order,
+            )
 
         if data["Status"] == "APPROVED":
             payment.confirm()
@@ -402,36 +421,47 @@ class PayoneCC(PayoneMethod):
 
     def _get_payment_params(self, request, payment):
         d = super()._get_payment_params(request, payment)
-        d["pseudocardpan"] = request.session['payment_payone_pseudocardpan']
-        d["cardholder"] = request.session.get('payment_payone_cardholder', '')
+        d["pseudocardpan"] = request.session["payment_payone_pseudocardpan"]
+        d["cardholder"] = request.session.get("payment_payone_cardholder", "")
         return d
 
     def payment_is_valid_session(self, request):
-        return request.session.get('payment_payone_pseudocardpan', '') != ''
+        return request.session.get("payment_payone_pseudocardpan", "") != ""
 
-    def payment_prepare(self, request, payment):
-        ppan = request.POST.get('payone_pseudocardpan', '')
+    def checkout_prepare(self, request: HttpRequest, cart):
+        ppan = request.POST.get("payone_pseudocardpan", "")
         if ppan:
-            request.session['payment_payone_pseudocardpan'] = ppan
-            for f in ('truncatedcardpan', 'cardtypeResponse', 'cardexpiredateResponse', 'cardholder'):
-                request.session[f'payment_payone_{f}'] = request.POST.get(f'payone_{f}', '')
-        elif not request.session['payment_payone_pseudocardpan']:
-            messages.warning(request, _('You may need to enable JavaScript for Stripe payments.'))
+            request.session["payment_payone_pseudocardpan"] = ppan
+            for f in (
+                "truncatedcardpan",
+                "cardtypeResponse",
+                "cardexpiredateResponse",
+                "cardholder",
+            ):
+                request.session[f"payment_payone_{f}"] = request.POST.get(
+                    f"payone_{f}", ""
+                )
+        elif not request.session["payment_payone_pseudocardpan"]:
+            messages.warning(
+                request, _("You may need to enable JavaScript for Stripe payments.")
+            )
             return False
         return True
 
+    def payment_prepare(self, request, payment):
+        return self.checkout_prepare(request, payment)
+
     def execute_payment(self, request: HttpRequest, payment: OrderPayment):
         try:
-            super().execute_payment(request, payment)
+            return super().execute_payment(request, payment)
         finally:
-            request.session.pop('payment_payone_pseudocardpan', None)
-            request.session.pop('payment_payone_truncatedcardpan', None)
-            request.session.pop('payment_payone_cardtypeResponse', None)
-            request.session.pop('payment_payone_cardexpiredateResponse', None)
-            request.session.pop('payment_payone_cardholder', None)
+            request.session.pop("payment_payone_pseudocardpan", None)
+            request.session.pop("payment_payone_truncatedcardpan", None)
+            request.session.pop("payment_payone_cardtypeResponse", None)
+            request.session.pop("payment_payone_cardexpiredateResponse", None)
+            request.session.pop("payment_payone_cardholder", None)
 
     def payment_form_render(self, request) -> str:
-
         d = {
             "request": "creditcardcheck",
             "responsetype": "JSON",
@@ -447,14 +477,20 @@ class PayoneCC(PayoneMethod):
         for k in sorted(d.keys()):
             h.update(d[k].encode())
         h.update(self.settings.key.encode())
-        d['hash'] = h.hexdigest()
+        d["hash"] = h.hexdigest()
 
         lng = get_language()[:2]
-        if lng not in ('de', 'en', 'es', 'fr', 'it', 'nl', 'pt'):
-            lng = 'en'
+        if lng not in ("de", "en", "es", "fr", "it", "nl", "pt"):
+            lng = "en"
 
         template = get_template("pretix_payone/checkout_payment_form_cc.html")
-        ctx = {"request": request, "event": self.event, "settings": self.settings, "req": json.dumps(d), "language": lng}
+        ctx = {
+            "request": request,
+            "event": self.event,
+            "settings": self.settings,
+            "req": json.dumps(d),
+            "language": lng,
+        }
         return template.render(ctx)
 
 
@@ -466,6 +502,15 @@ class PayoneGiropay(PayoneMethod):
     onlinebanktransfertype = "GPY"
     onlinebanktransfer_countries = ("DE",)
     # todo: ask for country for others like this
+
+
+class PayoneEPS(PayoneMethod):
+    method = "eps"
+    verbose_name = _("eps via PAYONE")
+    public_name = _("eps")
+    clearingtype = "sb"
+    onlinebanktransfertype = "EPS"
+    onlinebanktransfer_countries = ("AT",)
 
 
 class PayoneSEPADebit(PayoneMethod):

@@ -2,8 +2,7 @@ import logging
 from django.dispatch import receiver
 from django.urls import resolve
 from django.utils.translation import gettext_lazy as _
-
-from pretix.base.middleware import _parse_csp, _merge_csp, _render_csp
+from pretix.base.middleware import _merge_csp, _parse_csp, _render_csp
 from pretix.base.settings import settings_hierarkey
 from pretix.base.signals import logentry_display, register_payment_providers
 from pretix.presale.signals import process_response
@@ -15,6 +14,7 @@ logger = logging.getLogger(__name__)
 def register_payment_provider(sender, **kwargs):
     from .payment import (
         PayoneCC,
+        PayoneEPS,
         PayoneGiropay,
         PayonePayPal,
         PayoneSEPADebit,
@@ -26,6 +26,7 @@ def register_payment_provider(sender, **kwargs):
         PayoneGiropay,
         PayoneSEPADebit,
         PayoneCC,
+        PayoneEPS,
         PayoneSettingsHolder,
     ]
 
@@ -35,18 +36,7 @@ def pretixcontrol_logentry_display(sender, logentry, **kwargs):
     if not logentry.action_type.startswith("pretix_payone.event"):
         return
 
-    # TODO
-    plains = {
-        "canceled": _("Payment canceled."),
-        "failed": _("Payment failed."),
-        "paid": _("Payment succeeded."),
-        "expired": _("Payment expired."),
-        "disabled": _(
-            "Payment method disabled since we were unable to refresh the access token. Please "
-            "contact support."
-        ),
-    }
-    text = plains.get(logentry.action_type[20:], None)
+    text = logentry.action_type[20:]
     if text:
         return _("PAYONE reported an event: {}").format(text)
 
@@ -54,23 +44,26 @@ def pretixcontrol_logentry_display(sender, logentry, **kwargs):
 @receiver(signal=process_response, dispatch_uid="payment_payone_middleware_resp")
 def signal_process_response(sender, request, response, **kwargs):
     from .payment import PayoneSettingsHolder
+
     provider = PayoneSettingsHolder(sender)
     url = resolve(request.path_info)
 
-    if provider.settings.get('_enabled', as_type=bool) and ("checkout" in url.url_name or "order.pay" in url.url_name):
-        if 'Content-Security-Policy' in response:
-            h = _parse_csp(response['Content-Security-Policy'])
+    if provider.settings.get("_enabled", as_type=bool) and (
+        "checkout" in url.url_name or "order.pay" in url.url_name
+    ):
+        if "Content-Security-Policy" in response:
+            h = _parse_csp(response["Content-Security-Policy"])
         else:
             h = {}
 
-        sources = ['frame-src', 'style-src', 'script-src', 'img-src', 'connect-src']
+        sources = ["frame-src", "style-src", "script-src", "img-src", "connect-src"]
 
-        csps = {src: ['https://secure.pay1.de'] for src in sources}
+        csps = {src: ["https://secure.pay1.de"] for src in sources}
 
         _merge_csp(h, csps)
 
         if h:
-            response['Content-Security-Policy'] = _render_csp(h)
+            response["Content-Security-Policy"] = _render_csp(h)
     return response
 
 
