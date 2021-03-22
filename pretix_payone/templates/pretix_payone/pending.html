@@ -1,0 +1,29 @@
+{% load i18n %}
+{% load l10n %}
+{% load commadecimal %}
+{% load dotdecimal %}
+{% load ibanformat %}
+{% load money %}
+
+{% if payment.state == "created" %}
+    <p>{% blocktrans trimmed %}
+        We're waiting for an answer from the payment provider regarding your payment. Please contact us if this
+        takes more than a few days.
+    {% endblocktrans %}</p>
+{% elif payment.state == "pending" %}
+    <p>{% blocktrans trimmed %}
+        We're waiting for an answer from the payment provider regarding your payment. Please contact us if this
+        takes more than a few days.
+    {% endblocktrans %}</p>
+{% else %}
+    <p>{% blocktrans trimmed %}
+        The payment transaction could not be completed for the following reason:
+    {% endblocktrans %}
+        <br/>
+        {% if payment_info and payment_info.detail %}
+            {{ payment_info.detail }}
+        {% else %}
+            {% trans "Unknown reason" %}
+        {% endif %}
+    </p>
+{% endif %}

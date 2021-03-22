@@ -1,0 +1,36 @@
+{% load i18n %}
+
+{% if payment_info %}
+    <dl class="dl-horizontal">
+        {% if "TxId" in payment_info %}
+            <dt>{% trans "Transaction ID" %}</dt>
+            <dd>{{ payment_info.TxId }}</dd>
+        {% endif %}
+        {% if "Status" in payment_info %}
+            <dt>{% trans "Status" %}</dt>
+            <dd>{{ payment_info.Status }}</dd>
+        {% endif %}
+        {% if "Mandate" in payment_info %}
+            <dt>{% trans "Mandate ID" %}</dt>
+            <dd>{{ payment_info.Mandate.Identification }}</dd>
+            <dt>{% trans "Card expiry" %}</dt>
+            <dd>{{ payment_info.CreditCard.CardExpireDate }}</dd>
+            <dt>{% trans "Card holder" %}</dt>
+            <dd>{{ payment_info.CreditCard.CardHolder }}</dd>
+        {% endif %}
+        {% if "CreditCard" in payment_info %}
+            <dt>{% trans "Card number" %}</dt>
+            <dd>{{ payment_info.CreditCard.MaskedCardPan }}</dd>
+            <dt>{% trans "Card expiry" %}</dt>
+            <dd>{{ payment_info.CreditCard.CardExpireDate }}</dd>
+            <dt>{% trans "Card holder" %}</dt>
+            <dd>{{ payment_info.CreditCard.CardHolder }}</dd>
+        {% endif %}
+        {% if "Error" in payment_info %}
+            <dt>{% trans "Error code" %}</dt>
+            <dd>{{ payment_info.Error.ErrorCode }}</dd>
+            <dt>{% trans "Error message" %}</dt>
+            <dd>{{ payment_info.Error.ErrorMessage }}</dd>
+        {% endif %}
+    </dl>
+{% endif %}
