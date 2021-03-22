@@ -8,11 +8,12 @@ from collections import OrderedDict
 from datetime import timedelta
 from django import forms
 from django.conf import settings
+from django.contrib import messages
 from django.core import signing
 from django.db import transaction
 from django.http import HttpRequest
 from django.template.loader import get_template
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, get_language
 from i18nfield.strings import LazyI18nString
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
@@ -197,7 +198,7 @@ class PayoneMethod(BasePaymentProvider):
             "mid": self.settings.mid,
             "portalid": self.settings.portalid,
             "key": hashlib.md5(self.settings.key.encode()).hexdigest(),
-            "api_version": "3.8",
+            "api_version": "3.11",
             "mode": "test" if self.event.testmode else "live",
             "encoding": "UTF-8",
         }
@@ -213,7 +214,7 @@ class PayoneMethod(BasePaymentProvider):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
         return int(amount * 10 ** places)
 
-    def _get_payment_params(self, payment):
+    def _get_payment_params(self, request, payment):
         d = {
             "request": "authorization",
             "reference": "{ev}-{code}".format(
@@ -335,8 +336,7 @@ class PayoneMethod(BasePaymentProvider):
         return d
 
     def execute_payment(self, request: HttpRequest, payment: OrderPayment):
-        data = dict(**self._get_payment_params(payment), **self._default_params)
-        print(data)
+        data = dict(**self._get_payment_params(request, payment), **self._default_params)
         try:
             req = requests.post(
                 "https://api.pay1.de/post-gateway/",
@@ -400,14 +400,61 @@ class PayoneCC(PayoneMethod):
     public_name = _("Credit card")
     clearingtype = "cc"
 
-    def _get_payment_params(self, payment):
-        d = super()._get_payment_params(payment)
-        d["pseudocardpan"] = "TODO"  # TODO
+    def _get_payment_params(self, request, payment):
+        d = super()._get_payment_params(request, payment)
+        d["pseudocardpan"] = request.session['payment_payone_pseudocardpan']
+        d["cardholder"] = request.session.get('payment_payone_cardholder', '')
         return d
 
+    def payment_is_valid_session(self, request):
+        return request.session.get('payment_payone_pseudocardpan', '') != ''
+
+    def payment_prepare(self, request, payment):
+        ppan = request.POST.get('payone_pseudocardpan', '')
+        if ppan:
+            request.session['payment_payone_pseudocardpan'] = ppan
+            for f in ('truncatedcardpan', 'cardtypeResponse', 'cardexpiredateResponse', 'cardholder'):
+                request.session[f'payment_payone_{f}'] = request.POST.get(f'payone_{f}', '')
+        elif not request.session['payment_payone_pseudocardpan']:
+            messages.warning(request, _('You may need to enable JavaScript for Stripe payments.'))
+            return False
+        return True
+
+    def execute_payment(self, request: HttpRequest, payment: OrderPayment):
+        try:
+            super().execute_payment(request, payment)
+        finally:
+            request.session.pop('payment_payone_pseudocardpan', None)
+            request.session.pop('payment_payone_truncatedcardpan', None)
+            request.session.pop('payment_payone_cardtypeResponse', None)
+            request.session.pop('payment_payone_cardexpiredateResponse', None)
+            request.session.pop('payment_payone_cardholder', None)
+
     def payment_form_render(self, request) -> str:
+
+        d = {
+            "request": "creditcardcheck",
+            "responsetype": "JSON",
+            "aid": self.settings.aid,
+            "mid": self.settings.mid,
+            "portalid": self.settings.portalid,
+            "mode": "test" if self.event.testmode else "live",
+            "encoding": "UTF-8",
+            "storecarddata": "yes",
+        }
+
+        h = hashlib.md5()
+        for k in sorted(d.keys()):
+            h.update(d[k].encode())
+        h.update(self.settings.key.encode())
+        d['hash'] = h.hexdigest()
+
+        lng = get_language()[:2]
+        if lng not in ('de', 'en', 'es', 'fr', 'it', 'nl', 'pt'):
+            lng = 'en'
+
         template = get_template("pretix_payone/checkout_payment_form_cc.html")
-        ctx = {"request": request, "event": self.event, "settings": self.settings}
+        ctx = {"request": request, "event": self.event, "settings": self.settings, "req": json.dumps(d), "language": lng}
         return template.render(ctx)
 
 
