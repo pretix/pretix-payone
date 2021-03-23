@@ -212,8 +212,67 @@ class PayoneMethod(BasePaymentProvider):
             "encoding": "UTF-8",
         }
 
-    def execute_refund(self, refund: OrderRefund, retry=True):
-        raise NotImplementedError
+    def execute_refund(self, refund: OrderRefund):
+        refund_params = {
+            'request': 'refund',
+            'txid': refund.payment.info_data.get('TxId'),
+            'sequencenumber': refund.payment.info_data.get('sequencenumber', 0) + 1,
+            'amount': self._decimal_to_int(refund.amount) * -1,
+            'currency': self.event.currency,
+            "narrative_text": "{code} {event}".format(
+                code=refund.order.code,
+                event=str(self.event.name)[: 81 - 1 - len(refund.order.code)],
+            ),
+            'transaction_param': f"{self.event.slug}-{refund.full_id}",
+        }
+        data = dict(
+            **refund_params, **self._default_params
+        )
+        try:
+            req = requests.post(
+                "https://api.pay1.de/post-gateway/",
+                data=data,
+                headers={"Accept": "application/json"},
+            )
+            req.raise_for_status()
+        except HTTPError:
+            logger.exception("PAYONE error: %s" % req.text)
+            try:
+                d = req.json()
+            except:
+                d = {"error": True, "detail": req.text}
+            refund.info_data = d
+            refund.state = OrderRefund.REFUND_STATE_FAILED
+            refund.save()
+            raise PaymentException(
+                _(
+                    "We had trouble communicating with our payment provider. Please try again and get in touch "
+                    "with us if this problem persists."
+                )
+            )
+
+        data = req.json()
+
+        if data['Status'] != 'ERROR':
+            d = refund.payment.info_data
+            d['sequencenumber'] = refund_params['sequencenumber']
+            refund.payment.info = json.dumps(d)
+            refund.payment.save()
+
+        refund.info = json.dumps(data)
+
+        if data["Status"] == "APPROVED":
+            refund.done()
+        elif data["Status"] == "PENDING":
+            refund.done()  # not technically correct, but we're not sure we'd ever get an udpate.
+        elif data["Status"] == "ERROR":
+            refund.state = OrderRefund.REFUND_STATE_FAILED
+            refund.save()
+            raise PaymentException(
+                data["Error"].get(
+                    "ErrorMessage", "Unknown error"
+                )
+            )
 
     def _amount_to_decimal(self, cents):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
@@ -348,7 +407,6 @@ class PayoneMethod(BasePaymentProvider):
         data = dict(
             **self._get_payment_params(request, payment), **self._default_params
         )
-        print(data)
         try:
             req = requests.post(
                 "https://api.pay1.de/post-gateway/",
