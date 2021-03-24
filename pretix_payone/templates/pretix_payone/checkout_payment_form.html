@@ -1,4 +1,9 @@
 {% load i18n %}
+{% load bootstrap3 %}
+
+{% if form %}
+    {% bootstrap_form form layout='horizontal' %}
+{% endif %}
 
 <p>{% blocktrans trimmed %}
     After you submitted your order, we will redirect you to our payment provider to complete your payment.
