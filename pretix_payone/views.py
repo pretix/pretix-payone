@@ -184,7 +184,7 @@ class WebhookView(View):
                     pass
         elif data["txaction"] in ('refund', 'cancelation'):
             existing_refund_amount = r.payment.refunds.exclude(state__in=(OrderRefund.REFUND_STATE_CANCELED, OrderRefund.REFUND_STATE_FAILED)).aggregate(a=Sum('amount'))['a'] or Decimal('0.00')
-            new_refund_amount = r.payment.amount - data["receivable"]
+            new_refund_amount = r.payment.amount - Decimal(data["receivable"])
             if new_refund_amount > existing_refund_amount:
                 r.payment.create_external_refund(new_refund_amount - existing_refund_amount, info=json.encode(data))
 
