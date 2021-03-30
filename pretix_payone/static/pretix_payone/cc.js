@@ -129,8 +129,8 @@ $(function () {
     }
 
     window.payone_callback = function (response) {
-        waitingDialog.hide();
-        if (response.status === "INVALID") {
+        console.log(response)
+        if (response.status !== "VALID") {
             $("#payone_error").append($("<div>").addClass("alert alert-danger").text(
                 response.errormessage
             ))

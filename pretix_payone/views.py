@@ -15,6 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.csrf import csrf_exempt
+from django_scopes import scopes_disabled
 from pretix_payone.models import ReferencedPayoneObject
 
 from pretix.base.models import Order, OrderPayment, OrderRefund, Quota
@@ -84,11 +85,13 @@ class ReturnView(PayoneOrderView, View):
                 p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
                 if p.state == OrderPayment.PAYMENT_STATE_CREATED:
                     self.payment.fail()
-            raise PaymentException(
+            messages.error(
+                self.request,
                 _(
                     "The payment process has failed. See below for more information."
-                )
+                ),
             )
+            return self._redirect_to_order()
         elif kwargs['action'] == 'cancel':
             with transaction.atomic():
                 p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
@@ -132,6 +135,7 @@ class ReturnView(PayoneOrderView, View):
 
 @method_decorator(csrf_exempt, "dispatch")
 class WebhookView(View):
+    @scopes_disabled()
     def post(self, request, *args, **kwargs):
         try:
             r = ReferencedPayoneObject.objects.get(txid=request.POST.get('txid'))
@@ -160,19 +164,30 @@ class WebhookView(View):
         })
         balance = None
         if "balance" in data:
-            data["balance"] = Decimal(data["balance"])
+            balance = Decimal(data["balance"])
+
+        if "sequencenumber" in data:
+            d = r.payment.info_data
+            d["sequencenumber"] = data["sequencenumber"]
+            r.payment.info_data = d
+            r.payment.save()
 
         if data["txaction"] in ('capture', 'paid', 'appointed'):
-            if r.payment.state not in (OrderPayment.PAYMENT_STATE_CONFIRMED, OrderPayment.PAYMENT_STATE_REFUNDED) and balance is not None and balance <= Decimal('0.00'):
+            is_paid = (
+                (data["txaction"] == "appointed" and pprov.consider_appointed_as_paid) or
+                balance is not None and balance <= Decimal('0.00')
+            )
+            if r.payment.state not in (OrderPayment.PAYMENT_STATE_CONFIRMED, OrderPayment.PAYMENT_STATE_REFUNDED) and is_paid:
                 try:
                     r.payment.confirm()
                 except Quota.QuotaExceededException:
                     pass
-        elif data["txaction"] == 'refund':
+        elif data["txaction"] in ('refund', 'cancelation'):
             existing_refund_amount = r.payment.refunds.exclude(state__in=(OrderRefund.REFUND_STATE_CANCELED, OrderRefund.REFUND_STATE_FAILED)).aggregate(a=Sum('amount'))['a'] or Decimal('0.00')
             new_refund_amount = r.payment.amount - data["receivable"]
             if new_refund_amount > existing_refund_amount:
                 r.payment.create_external_refund(new_refund_amount - existing_refund_amount, info=json.encode(data))
+
         return HttpResponse('TSOK', status=200)
 
     @cached_property

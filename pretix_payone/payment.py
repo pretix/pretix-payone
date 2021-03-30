@@ -72,21 +72,21 @@ class PayoneSettingsHolder(BasePaymentProvider):
         ]
         methods = [
             ("creditcard", _("Credit card")),
-            ("giropay", _("giropay")),
-            ("sepadebit", _("SEPA direct debit")),
             ("paypal", _("PayPal")),
-            ("eps", _("eps")),
+            ("eps", _("eps")),  # ???
             ("sofort", _("SOFORT")),
             ("ideal", _("iDEAL")),
-            ("przelewy24", _("Przelewy24")),
-            ("multibanco", _("Multibanco")),
-            ("bancontact", _("Bancontact")),
-            ("vkp", _("Verkkopankki")),
-            ("mybank", _("MyBank")),
-            ("alipay", _("Alipay")),
-            ("paydirekt", _("paydirekt")),
-            ("paysafecard", _("paysafecard")),
-            ("qiwi", _("Qiwi")),
+            # disabled because they are untested
+            # ("giropay", _("giropay")),
+            # ("przelewy24", _("Przelewy24")),
+            # ("multibanco", _("Multibanco")),
+            # ("bancontact", _("Bancontact")),
+            # ("vkp", _("Verkkopankki")),
+            # ("mybank", _("MyBank")),
+            # ("alipay", _("Alipay")),
+            # ("paydirekt", _("paydirekt")),
+            # ("paysafecard", _("paysafecard")),
+            # ("qiwi", _("Qiwi")),
             # more: https://docs.payone.com/display/public/PLATFORM/General+information
         ]
         d = OrderedDict(
@@ -119,6 +119,7 @@ class PayoneMethod(BasePaymentProvider):
     clearingtype = None  # https://docs.payone.com/display/public/PLATFORM/clearingtype+-+definition
     onlinebanktransfertype = None  # https://docs.payone.com/display/public/PLATFORM/onlinebanktransfertype+-+definition
     onlinebanktransfer_countries = ()
+    consider_appointed_as_paid = True
     wallettype = (
         None  # https://docs.payone.com/display/PLATFORM/wallettype+-+definition
     )
@@ -219,6 +220,9 @@ class PayoneMethod(BasePaymentProvider):
 
     @property
     def _default_params(self):
+        from pretix_payone import __version__ as pluginver
+        from pretix import __version__
+
         return {
             "aid": self.settings.aid,
             "mid": self.settings.mid,
@@ -227,13 +231,17 @@ class PayoneMethod(BasePaymentProvider):
             "api_version": "3.11",
             "mode": "test" if self.event.testmode else "live",
             "encoding": "UTF-8",
+            "integrator_name": "rami.io GmbH",
+            "integrator_version": pluginver,
+            "solution_name": "pretix",
+            "solution_version": __version__,
         }
 
     def execute_refund(self, refund: OrderRefund):
         refund_params = {
             'request': 'refund',
             'txid': refund.payment.info_data.get('TxId'),
-            'sequencenumber': refund.payment.info_data.get('sequencenumber', 0) + 1,
+            'sequencenumber': int(refund.payment.info_data.get('sequencenumber', "0")) + 1,
             'amount': self._decimal_to_int(refund.amount) * -1,
             'currency': self.event.currency,
             "narrative_text": "{code} {event}".format(
@@ -304,7 +312,7 @@ class PayoneMethod(BasePaymentProvider):
             "request": "authorization",
             "reference": "{ev}-{code}".format(
                 ev=self.event.slug[: 20 - 1 - len(payment.order.code)],
-                code=payment.order.code,
+                code=payment.full_id,
             ),
             "amount": self._decimal_to_int(payment.amount),
             "currency": self.event.currency,
@@ -516,9 +524,9 @@ class PayoneCC(PayoneMethod):
                 request.session[f"payment_payone_{f}"] = request.POST.get(
                     f"payone_{f}", ""
                 )
-        elif not request.session["payment_payone_pseudocardpan"]:
+        elif not request.session.get("payment_payone_pseudocardpan"):
             messages.warning(
-                request, _("You may need to enable JavaScript for Stripe payments.")
+                request, _("You may need to enable JavaScript for payments.")
             )
             return False
         return True
@@ -668,6 +676,7 @@ class PayoneIdeal(PayoneMethod):
     def _get_payment_params(self, request, payment):
         p = super()._get_payment_params(request, payment)
         p['bankgrouptype'] = request.session['payment_payone_ideal_bank']
+        p['country'] = 'NL'
         return p
 
     def checkout_prepare(self, request, cart):
@@ -825,13 +834,13 @@ class PayoneQiwi(PayoneMethod):
 Test status:
 
 CC: works
-CC 3DS: works, but stays in "pending"
-eps: works, but stays in "pending"
+CC 3DS: works
+eps: works
 giropay: fails "invalid account data"
-SOFORT: works, but stays in "pending"
+SOFORT: works
 SEPA DEBIT: unimplemented
-PayPal: untested (not configured)
-ideal: untested (not configured)
+PayPal: works
+ideal: works
 przelewy24: untested (not configured)
 bancontact: untested (not configured)
 alipay: untested (not configured)
