@@ -384,8 +384,8 @@ class PayoneMethod(BasePaymentProvider):
             d["company"] = ia.company[:50]
 
         if ia.name_parts.get("family_name"):
-            d["lastname"] = ia["family_name"][:50]
-            d["firstname"] = ia.get("given_name", "")[:50]
+            d["lastname"] = ia.name_parts.get("family_name", "")[:50]
+            d["firstname"] = ia.name_parts.get("given_name", "")[:50]
         elif ia.name:
             d["lastname"] = ia.name.rsplit(" ", 1)[-1][:50]
             d["firstname"] = ia.name.rsplit(" ", 1)[0][:50]
