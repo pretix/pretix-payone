@@ -133,7 +133,8 @@ $(function () {
         if (response.status !== "VALID") {
             $("#payone_error").append($("<div>").addClass("alert alert-danger").text(
                 response.errormessage
-            ))
+            ));
+            waitingDialog.hide();
         } else {
             document.getElementById("payone_pseudocardpan").value = response.pseudocardpan;
             document.getElementById("payone_truncatedcardpan").value = response.truncatedcardpan;
