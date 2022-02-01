@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.core import signing
 from django.http import HttpRequest
 from django.template.loader import get_template
+from django.utils.safestring import mark_safe
 from django.utils.translation import get_language, gettext_lazy as _
 from pretix_payone.models import ReferencedPayoneObject
 from requests import HTTPError
@@ -26,6 +27,18 @@ from pretix.helpers.urls import build_absolute_uri as build_global_uri
 from pretix.multidomain.urlreverse import build_absolute_uri
 
 logger = logging.getLogger(__name__)
+
+cardtypes = [
+    ("V", _("VISA")),
+    ("M", _("MasterCard")),
+    ("J", _("JCB")),
+    ("A", _("American Express")),
+    ("D", _("Diners Club/Discover")),
+    ("O", _("Maestro")),
+    ("U", _("UTAP/AirPlus")),
+    ("P", _("China Union Pay"))
+    # https://docs.payone.com/display/public/PLATFORM/cardtype+-+definition
+]
 
 
 class PayoneSettingsHolder(BasePaymentProvider):
@@ -93,6 +106,27 @@ class PayoneSettingsHolder(BasePaymentProvider):
             fields
             + [
                 (f"method_{k}", forms.BooleanField(label=v, required=False))
+                for k, v in [methods.pop(0)]
+            ]
+            + [
+                (
+                    f"cardtypes_{k}",
+                    forms.BooleanField(
+                        label='{} {}'.format(
+                            '<span class="fa fa-credit-card"></span>',
+                            v
+                        ),
+                        required=False,
+                        widget=forms.CheckboxInput(
+                            attrs={
+                                'data-display-dependency': '#id_payment_payone_method_creditcard'
+                            }
+                        ),
+                    )
+                ) for k, v in cardtypes
+            ]
+            + [
+                (f"method_{k}", forms.BooleanField(label=v, required=False))
                 for k, v in methods
             ]
             + list(super().settings_form_fields.items())
@@ -139,8 +173,12 @@ class PayoneMethod(BasePaymentProvider):
     @property
     def test_mode_message(self):
         if self.event.testmode:
-            return _(
-                "The PAYONE plugin is operating in test mode. No money will actually be transferred."
+            return mark_safe(
+                _('The PayOne plugin is operating in test mode. You can use one of <a {args}>many test '
+                  'cards</a> to perform a transaction. No money will actually be transferred.').format(
+                    args='href="https://docs.payone.com/display/public/PLATFORM/Testdata" '
+                         'target="_blank"'
+                )
             )
         return None
 
@@ -573,7 +611,11 @@ class PayoneCC(PayoneMethod):
             "settings": self.settings,
             "req": json.dumps(d),
             "language": lng,
+            "cardtypes": json.dumps(
+                [k for k, v in cardtypes if self.settings.get(f"cardtypes_{k}", False, as_type=bool)]
+            ),
         }
+        print(ctx['cardtypes'])
         return template.render(ctx)
 
 
