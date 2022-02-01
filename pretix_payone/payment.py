@@ -615,7 +615,6 @@ class PayoneCC(PayoneMethod):
                 [k for k, v in cardtypes if self.settings.get(f"cardtypes_{k}", False, as_type=bool)]
             ),
         }
-        print(ctx['cardtypes'])
         return template.render(ctx)
 
 
