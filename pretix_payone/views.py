@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 from decimal import Decimal
-
 from django.contrib import messages
 from django.core import signing
 from django.db import transaction
@@ -16,11 +15,10 @@ from django.views import View
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.csrf import csrf_exempt
 from django_scopes import scopes_disabled
-from pretix_payone.models import ReferencedPayoneObject
-
 from pretix.base.models import Order, OrderPayment, OrderRefund, Quota
-from pretix.base.payment import PaymentException
 from pretix.multidomain.urlreverse import eventreverse
+
+from pretix_payone.models import ReferencedPayoneObject
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +47,15 @@ class PayoneOrderView:
         try:
             self.order = request.event.orders.get(code=kwargs["order"])
             if (
-                    hashlib.sha1(self.order.secret.lower().encode()).hexdigest()
-                    != kwargs["hash"].lower()
+                hashlib.sha1(self.order.secret.lower().encode()).hexdigest()
+                != kwargs["hash"].lower()
             ):
                 raise Http404("")
         except Order.DoesNotExist:
             # Do a hash comparison as well to harden timing attacks
             if (
-                    "abcdefghijklmnopq".lower()
-                    == hashlib.sha1("abcdefghijklmnopq".encode()).hexdigest()
+                "abcdefghijklmnopq".lower()
+                == hashlib.sha1("abcdefghijklmnopq".encode()).hexdigest()
             ):
                 raise Http404("")
             else:
@@ -80,36 +78,37 @@ class PayoneOrderView:
 @method_decorator(xframe_options_exempt, "dispatch")
 class ReturnView(PayoneOrderView, View):
     def get(self, request, *args, **kwargs):
-        if kwargs['action'] == 'error':
+        if kwargs["action"] == "error":
             with transaction.atomic():
                 p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
                 if p.state == OrderPayment.PAYMENT_STATE_CREATED:
                     self.payment.fail()
             messages.error(
                 self.request,
-                _(
-                    "The payment process has failed. See below for more information."
-                ),
+                _("The payment process has failed. See below for more information."),
             )
             return self._redirect_to_order()
-        elif kwargs['action'] == 'cancel':
+        elif kwargs["action"] == "cancel":
             with transaction.atomic():
                 p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
                 if p.state == OrderPayment.PAYMENT_STATE_CREATED:
                     self.payment.state = OrderPayment.PAYMENT_STATE_CANCELED
-                    self.payment.save(update_fields=['state'])
-                    self.payment.order.log_action('pretix.event.order.payment.canceled', {
-                        'local_id': self.payment.local_id,
-                        'provider': self.payment.provider,
-                        'data': self.payment.info_data
-                    })
+                    self.payment.save(update_fields=["state"])
+                    self.payment.order.log_action(
+                        "pretix.event.order.payment.canceled",
+                        {
+                            "local_id": self.payment.local_id,
+                            "provider": self.payment.provider,
+                            "data": self.payment.info_data,
+                        },
+                    )
             return self._redirect_to_order()
-        elif kwargs['action'] == 'success':
+        elif kwargs["action"] == "success":
             with transaction.atomic():
                 p = OrderPayment.objects.select_for_update().get(pk=self.payment.pk)
                 if p.state == OrderPayment.PAYMENT_STATE_CREATED:
                     p.state = OrderPayment.PAYMENT_STATE_PENDING
-                    p.save(update_fields=['state'])
+                    p.save(update_fields=["state"])
             return self._redirect_to_order()
 
     def _redirect_to_order(self):
@@ -138,30 +137,35 @@ class WebhookView(View):
     @scopes_disabled()
     def post(self, request, *args, **kwargs):
         try:
-            r = ReferencedPayoneObject.objects.get(txid=request.POST.get('txid'))
+            r = ReferencedPayoneObject.objects.get(txid=request.POST.get("txid"))
         except ReferencedPayoneObject.DoesNotExist:
             return HttpResponse(status=409)
 
         pprov = r.payment.payment_provider
-        if hashlib.md5(pprov.settings.key.encode()).hexdigest() != request.POST.get('key'):
-            return HttpResponse('Invalid key', status=403)
+        if hashlib.md5(pprov.settings.key.encode()).hexdigest() != request.POST.get(
+            "key"
+        ):
+            return HttpResponse("Invalid key", status=403)
 
-        if pprov.settings.aid != request.POST.get('aid'):
-            return HttpResponse('Invalid AID', status=403)
+        if pprov.settings.aid != request.POST.get("aid"):
+            return HttpResponse("Invalid AID", status=403)
 
-        if pprov.settings.portalid != request.POST.get('portalid'):
-            return HttpResponse('Invalid Portal ID', status=403)
+        if pprov.settings.portalid != request.POST.get("portalid"):
+            return HttpResponse("Invalid Portal ID", status=403)
 
-        if request.POST.get('mode') == 'test' and not r.order.testmode:
-            return HttpResponse('Invalid testmode usage', status=403)
+        if request.POST.get("mode") == "test" and not r.order.testmode:
+            return HttpResponse("Invalid testmode usage", status=403)
 
-        data = {k: request.POST.get(k) for k in request.POST.keys() if k not in ('key')}
+        data = {k: request.POST.get(k) for k in request.POST.keys() if k not in ("key")}
 
-        r.order.log_action(f'pretix_payone.event.{data["txaction"]}', data={
-            'local_id': r.payment.local_id,
-            'provider': r.payment.provider,
-            'data': data
-        })
+        r.order.log_action(
+            f'pretix_payone.event.{data["txaction"]}',
+            data={
+                "local_id": r.payment.local_id,
+                "provider": r.payment.provider,
+                "data": data,
+            },
+        )
         balance = None
         if "balance" in data:
             balance = Decimal(data["balance"])
@@ -172,23 +176,41 @@ class WebhookView(View):
             r.payment.info_data = d
             r.payment.save()
 
-        if data["txaction"] in ('capture', 'paid', 'appointed'):
+        if data["txaction"] in ("capture", "paid", "appointed"):
             is_paid = (
-                (data["txaction"] == "appointed" and pprov.consider_appointed_as_paid) or
-                balance is not None and balance <= Decimal('0.00')
+                (data["txaction"] == "appointed" and pprov.consider_appointed_as_paid)
+                or balance is not None
+                and balance <= Decimal("0.00")
             )
-            if r.payment.state not in (OrderPayment.PAYMENT_STATE_CONFIRMED, OrderPayment.PAYMENT_STATE_REFUNDED) and is_paid:
+            if (
+                r.payment.state
+                not in (
+                    OrderPayment.PAYMENT_STATE_CONFIRMED,
+                    OrderPayment.PAYMENT_STATE_REFUNDED,
+                )
+                and is_paid
+            ):
                 try:
                     r.payment.confirm()
                 except Quota.QuotaExceededException:
                     pass
-        elif data["txaction"] in ('refund', 'cancelation'):
-            existing_refund_amount = r.payment.refunds.exclude(state__in=(OrderRefund.REFUND_STATE_CANCELED, OrderRefund.REFUND_STATE_FAILED)).aggregate(a=Sum('amount'))['a'] or Decimal('0.00')
+        elif data["txaction"] in ("refund", "cancelation"):
+            existing_refund_amount = (
+                r.payment.refunds.exclude(
+                    state__in=(
+                        OrderRefund.REFUND_STATE_CANCELED,
+                        OrderRefund.REFUND_STATE_FAILED,
+                    )
+                ).aggregate(a=Sum("amount"))["a"]
+                or Decimal("0.00")
+            )
             new_refund_amount = r.payment.amount - Decimal(data["receivable"])
             if new_refund_amount > existing_refund_amount:
-                r.payment.create_external_refund(new_refund_amount - existing_refund_amount, info=json.encode(data))
+                r.payment.create_external_refund(
+                    new_refund_amount - existing_refund_amount, info=json.encode(data)
+                )
 
-        return HttpResponse('TSOK', status=200)
+        return HttpResponse("TSOK", status=200)
 
     @cached_property
     def payment(self):
