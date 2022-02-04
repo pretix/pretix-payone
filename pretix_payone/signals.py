@@ -85,14 +85,3 @@ def signal_process_response(sender, request, response, **kwargs):
         if h:
             response["Content-Security-Policy"] = _render_csp(h)
     return response
-
-
-settings_hierarkey.add_default("payment_payone_method_creditcard", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_V", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_M", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_J", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_A", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_D", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_O", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_U", True, bool)
-settings_hierarkey.add_default("payment_payone_cardtypes_P", True, bool)
