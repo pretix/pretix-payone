@@ -342,11 +342,11 @@ class PayoneMethod(BasePaymentProvider):
 
     def _amount_to_decimal(self, cents):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
-        return round_decimal(float(cents) / (10 ** places), self.event.currency)
+        return round_decimal(float(cents) / (10**places), self.event.currency)
 
     def _decimal_to_int(self, amount):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
-        return int(amount * 10 ** places)
+        return int(amount * 10**places)
 
     def _get_payment_params(self, request, payment):
         d = {
