@@ -1,5 +1,4 @@
 from django.conf.urls import include, url
-from pretix.multidomain import event_url
 
 from .views import ReturnView, WebhookView, redirect_view
 

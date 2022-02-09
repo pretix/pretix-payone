@@ -25,6 +25,7 @@
         <span class="fa fa-cog fa-spin"></span> {% trans "Loading…" %}
     </div>
     <div class="form-horizontal payone-form hidden">
+        <script type="text/plain" id="payone_cardtypes">{{ cardtypes|safe }}</script>
         <div class="form-group payone-number">
             <label class="control-label col-sm-2">
                 {% trans "Credit card number" %}

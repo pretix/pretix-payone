@@ -3,7 +3,6 @@ from django.dispatch import receiver
 from django.urls import resolve
 from django.utils.translation import gettext_lazy as _
 from pretix.base.middleware import _merge_csp, _parse_csp, _render_csp
-from pretix.base.settings import settings_hierarkey
 from pretix.base.signals import logentry_display, register_payment_providers
 from pretix.presale.signals import process_response
 
@@ -13,22 +12,22 @@ logger = logging.getLogger(__name__)
 @receiver(register_payment_providers, dispatch_uid="payment_payone")
 def register_payment_provider(sender, **kwargs):
     from .payment import (
+        PayoneAlipay,
+        PayoneBancontact,
         PayoneCC,
         PayoneEPS,
         PayoneGiropay,
+        PayoneIdeal,
+        PayoneMultibanco,
+        PayoneMyBank,
+        PayonePaydirekt,
         PayonePayPal,
         PayonePaysafecard,
-        PayoneSettingsHolder,
-        PayonePaydirekt,
-        PayoneQiwi,
-        PayoneIdeal,
-        PayoneAlipay,
-        PayoneBancontact,
-        PayoneMultibanco,
-        PayoneVerkkopankki,
-        PayoneMyBank,
         PayonePrzelewy24,
+        PayoneQiwi,
+        PayoneSettingsHolder,
         PayoneSofort,
+        PayoneVerkkopankki,
     )
 
     return [
@@ -85,6 +84,3 @@ def signal_process_response(sender, request, response, **kwargs):
         if h:
             response["Content-Security-Policy"] = _render_csp(h)
     return response
-
-
-settings_hierarkey.add_default("payment_payone_method_creditcard", True, bool)

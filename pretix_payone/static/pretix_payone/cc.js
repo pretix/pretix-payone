@@ -7,7 +7,7 @@ $(function () {
 
 
     var request,
-        supportedCardtypes = ["#", "V", "M", "J", "A", "D", "O", "U", "P"],
+        supportedCardtypes = ["#"].concat(JSON.parse($.trim($("#payone_cardtypes").html()))),
         config;
 
     config = {
