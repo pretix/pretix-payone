@@ -10,14 +10,15 @@ __version__ = "1.1.0"
 
 class PluginApp(PluginConfig):
     name = "pretix_payone"
-    verbose_name = "PayOne"
+    verbose_name = "PAYONE"
 
     class PretixPluginMeta:
-        name = gettext_lazy("PayOne")
+        name = gettext_lazy("PAYONE")
         author = "pretix team"
         description = gettext_lazy(
-            "Allows to process payments through PAYONE (formerly BS Payone)"
+            "Accept payments through PAYONE (formerly BS Payone)."
         )
+        picture = "pretix_payone/logo.svg"
         visible = True
         version = __version__
         category = "PAYMENT"

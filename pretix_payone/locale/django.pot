@@ -1,96 +1,101 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
+"Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2022-03-22 22:35+0100\n"
-"PO-Revision-Date: \n"
-"Last-Translator: pretix team\n"
-"Language-Team: \n"
-"Language: de\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.0.1\n"
 
 #: pretix_payone/__init__.py:16
 msgid "PAYONE"
-msgstr "PAYONE"
+msgstr ""
 
 #: pretix_payone/__init__.py:19
 msgid "Accept payments through PAYONE (formerly BS Payone)."
-msgstr "Akzeptiere Zahlungen über PAYONE (ehemals BS Payone)."
+msgstr ""
 
 #: pretix_payone/payment.py:33
 msgid "VISA"
-msgstr "VISA"
+msgstr ""
 
 #: pretix_payone/payment.py:34
 msgid "MasterCard"
-msgstr "MasterCard"
+msgstr ""
 
 #: pretix_payone/payment.py:35
 msgid "JCB"
-msgstr "JCB"
+msgstr ""
 
 #: pretix_payone/payment.py:36
 msgid "American Express"
-msgstr "American Express"
+msgstr ""
 
 #: pretix_payone/payment.py:37
 msgid "Diners Club/Discover"
-msgstr "Diners Club/Discover"
+msgstr ""
 
 #: pretix_payone/payment.py:38
 msgid "Maestro"
-msgstr "Maestro"
+msgstr ""
 
 #: pretix_payone/payment.py:39
 msgid "UTAP/AirPlus"
-msgstr "UTAP/AirPlus"
+msgstr ""
 
 #: pretix_payone/payment.py:40
 msgid "China Union Pay"
-msgstr "China Union Pay"
+msgstr ""
 
 #: pretix_payone/payment.py:61
 msgid "Merchant ID"
-msgstr "Händler-ID"
+msgstr ""
 
 #: pretix_payone/payment.py:68
 msgid "Sub-Account ID"
-msgstr "Sub-Account-ID"
+msgstr ""
 
 #: pretix_payone/payment.py:75
 msgid "Portal ID"
-msgstr "Portal-ID"
+msgstr ""
 
 #: pretix_payone/payment.py:82
 msgid "Key"
-msgstr "Schlüssel"
+msgstr ""
 
 #: pretix_payone/payment.py:88 pretix_payone/payment.py:544
 msgid "Credit card"
-msgstr "Kreditkarte"
+msgstr ""
 
 #: pretix_payone/payment.py:89 pretix_payone/payment.py:890
 msgid "PayPal"
-msgstr "PayPal"
+msgstr ""
 
 #: pretix_payone/payment.py:90 pretix_payone/payment.py:674
 msgid "eps"
-msgstr "eps"
+msgstr ""
 
 #: pretix_payone/payment.py:91 pretix_payone/payment.py:791
 msgid "SOFORT"
-msgstr "SOFORT"
+msgstr ""
 
 #: pretix_payone/payment.py:92 pretix_payone/payment.py:741
 msgid "iDEAL"
-msgstr "iDEAL"
+msgstr ""
 
 #: pretix_payone/payment.py:93 pretix_payone/payment.py:632
 msgid "giropay"
-msgstr "giropay"
+msgstr ""
 
 #: pretix_payone/payment.py:141
 msgid ""
@@ -98,9 +103,6 @@ msgid ""
 "order to automatically cancel orders when charges are refunded externally "
 "and to process asynchronous payment methods like SOFORT."
 msgstr ""
-"Bitte konfiguriere die TransactionStatus-URL mit der folgenden Adresse damit "
-"Bestellungen automatisch storniert werden, wenn Erstattungen extern erstellt "
-"werden und damit asynchrone Zahlungsmethoden wie SOFORT funktionieren."
 
 #: pretix_payone/payment.py:179
 #, python-brace-format
@@ -109,143 +111,137 @@ msgid ""
 ">many test cards</a> to perform a transaction. No money will actually be "
 "transferred."
 msgstr ""
-"Das PayOne-Modul befindet sich im Testmodus. Du kannst eine von <a {args}"
-">vielen Testkarten</a> verwenden um eine Transaktion durchzuführen. Es wird "
-"kein echtes Geld transferiert."
 
 #: pretix_payone/payment.py:320 pretix_payone/payment.py:493
 msgid ""
 "We had trouble communicating with our payment provider. Please try again and "
 "get in touch with us if this problem persists."
 msgstr ""
-"Bei der Kommunikation mit dem Zahlungsdienstleister ist ein Problem "
-"aufgetreten. Bitte versuche es erneut und setze dich mit uns in Verbindung, "
-"wenn das Problem fortbesteht."
 
 #: pretix_payone/payment.py:519
 #, python-brace-format
 msgid "Our payment provider returned an error message: {message}"
-msgstr "Unser Zahlungsanbieter hat eine Fehlermeldung zurückgegeben: {message}"
+msgstr ""
 
 #: pretix_payone/payment.py:543
 msgid "Credit card via PAYONE"
-msgstr "Kreditkarte über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:571
 msgid "You may need to enable JavaScript for payments."
-msgstr "Du musst JavaScript aktivieren, um zu bezahlen."
+msgstr ""
 
 #: pretix_payone/payment.py:631
 msgid "giropay via PAYONE"
-msgstr "giropay über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:649
 msgid "IBAN"
-msgstr "IBAN"
+msgstr ""
 
 #: pretix_payone/payment.py:651
 msgid "Please enter a german IBAN starting with DE"
-msgstr "Bitte gib eine deutsche IBAN mit DE ein"
+msgstr ""
 
 #: pretix_payone/payment.py:673
 msgid "eps via PAYONE"
-msgstr "eps über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:733 pretix_payone/payment.py:783
 msgid "Bank"
-msgstr "Bank"
+msgstr ""
 
 #: pretix_payone/payment.py:740
 msgid "iDEAL via PAYONE"
-msgstr "iDEAL über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:790
 msgid "SOFORT via PAYONE"
-msgstr "SOFORT über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:831
 msgid "Bank country"
-msgstr "Land der Bank"
+msgstr ""
 
 #: pretix_payone/payment.py:844
 msgid "Przelewy24 via PAYONE"
-msgstr "Przelewy24 über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:845
 msgid "Przelewy24"
-msgstr "Przelewy24"
+msgstr ""
 
 #: pretix_payone/payment.py:853
 msgid "Multibanco via PAYONE"
-msgstr "Multibanco über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:854
 msgid "Multibanco"
-msgstr "Multibanco"
+msgstr ""
 
 #: pretix_payone/payment.py:862
 msgid "Bancontact via PAYONE"
-msgstr "Bancontact über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:863
 msgid "Bancontact"
-msgstr "Bancontact"
+msgstr ""
 
 #: pretix_payone/payment.py:871
 msgid "Verkkopankki via PAYONE"
-msgstr "Verkkopankki über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:872
 msgid "Verkkopankki"
-msgstr "Verkkopankki"
+msgstr ""
 
 #: pretix_payone/payment.py:880
 msgid "MyBank via PAYONE"
-msgstr "MyBank über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:881
 msgid "MyBank"
-msgstr "MyBank"
+msgstr ""
 
 #: pretix_payone/payment.py:889
 msgid "PayPal via PAYONE"
-msgstr "PayPal über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:897
 msgid "Alipay via PAYONE"
-msgstr "Alipay über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:898
 msgid "Alipay"
-msgstr "Alipay"
+msgstr ""
 
 #: pretix_payone/payment.py:908
 msgid "paydirekt via PAYONE"
-msgstr "paydirekt über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:909
 msgid "paydirekt"
-msgstr "paydirekt"
+msgstr ""
 
 #: pretix_payone/payment.py:923
 msgid "paysafeard via PAYONE"
-msgstr "paysafecad über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:924
 msgid "paysafecard"
-msgstr "paysafecard"
+msgstr ""
 
 #: pretix_payone/payment.py:931
 msgid "Qiwi via PAYONE"
-msgstr "Qiwi über PAYONE"
+msgstr ""
 
 #: pretix_payone/payment.py:932
 msgid "Qiwi"
-msgstr "Qiwi"
+msgstr ""
 
 #: pretix_payone/signals.py:60
 msgid "PAYONE reported an event: {}"
-msgstr "PAYONE meldete ein Ereignis: {}"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_confirm.html:3
 #: pretix_payone/templates/pretix_payone/checkout_payment_form.html:8
@@ -254,73 +250,68 @@ msgid ""
 "to complete your payment. You will then be redirected back here to get your "
 "tickets."
 msgstr ""
-"Nachdem du deine Bestellung abgesendet hast, werden wir dich zu unserem "
-"Dienstleister umleiten um deine Zahlung abzuschließen. Danach wirst du hier "
-"her zurückgeleitet und erhältst deine Tickets."
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_confirm.html:8
 msgid "Payment method"
-msgstr "Zahlungsmethode"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:8
 msgid ""
 "You already entered a card number that we will use to charge the payment "
 "amount."
 msgstr ""
-"Du hast bereits eine Kartennummer eingegeben, die wir für die Zahlung "
-"benutzen werden."
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:12
 #: pretix_payone/templates/pretix_payone/control.html:18
 msgid "Card number"
-msgstr "Kreditkartennummer"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:16
 msgid "Use a different card"
-msgstr "Andere Kreditkarte verwenden"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:25
 msgid "Loading…"
-msgstr "Lade…"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:31
 msgid "Credit card number"
-msgstr "Kreditkartennummer"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:42
 msgid "Expiration date"
-msgstr "Ablaufdatum"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:53
 msgid "Security code (CVC)"
-msgstr "Sicherheitscode (CVC)"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/checkout_payment_form_cc.html:61
 #: pretix_payone/templates/pretix_payone/control.html:14
 #: pretix_payone/templates/pretix_payone/control.html:22
 msgid "Card holder"
-msgstr "Karteninhaber"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/control.html:6
 msgid "Transaction ID"
-msgstr "Transaktions-ID"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/control.html:10
 msgid "Mandate ID"
-msgstr "Mandats-ID"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/control.html:12
 #: pretix_payone/templates/pretix_payone/control.html:20
 msgid "Card expiry"
-msgstr "Ablaufdatum"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/control.html:26
 msgid "Error code"
-msgstr "Fehlercode"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/control.html:28
 msgid "Error message"
-msgstr "Fehlermeldung"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/pending.html:9
 #: pretix_payone/templates/pretix_payone/pending.html:14
@@ -328,42 +319,34 @@ msgid ""
 "We're waiting for an answer from the payment provider regarding your "
 "payment. Please contact us if this takes more than a few days."
 msgstr ""
-"Wir warten auf eine Antwort des Zahlungsdienstleisters bezüglich deiner "
-"Zahlung. Bitte kontaktiere uns, falls dies mehr als ein paar Tage dauert."
 
 #: pretix_payone/templates/pretix_payone/pending.html:19
 msgid ""
 "The payment transaction could not be completed for the following reason:"
-msgstr "Die Zahlung konnte aus folgendem Grund nicht abgeschlossen werden:"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/pending.html:26
 msgid "Unknown reason"
-msgstr "Unbekannter Grund"
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/redirect.html:17
 msgid "The payment process has started in a new window."
-msgstr "Der Zahlungsvorgang wird in einem neuen Fenster fortgesetzt."
+msgstr ""
 
 #: pretix_payone/templates/pretix_payone/redirect.html:20
 msgid "The window to enter your payment data was not opened or was closed?"
 msgstr ""
-"Das Fenster zur Eingabe der Zahlungsdaten wurde geschlossen oder nie "
-"geöffnet?"
 
 #: pretix_payone/templates/pretix_payone/redirect.html:24
 msgid "Click here in order to open the window."
-msgstr "Hier klicken um das Fenster zu öffnen."
+msgstr ""
 
 #: pretix_payone/views.py:88
 msgid "The payment process has failed. See below for more information."
 msgstr ""
-"Der Zahlungsprozess ist fehlgeschlagen. Mehr Informationen findest du weiter "
-"unten."
 
 #: pretix_payone/views.py:119
 msgid ""
 "Sorry, there was an error in the payment process. Please check the link in "
 "your emails to continue."
 msgstr ""
-"Entschuldige bitte, es gab einen Fehler im Bezahlvorgang. Bitte klicke auf "
-"den Link in der E-Mail, die wir dir geschickt haben, um fortzufahren."
