@@ -353,7 +353,7 @@ class PayoneMethod(BasePaymentProvider):
         d = {
             "request": "authorization",
             "reference": "{ev}-{code}".format(
-                ev=self.event.slug[: 20 - 1 - len(payment.order.code)],
+                ev=self.event.slug[: 20 - 1 - len(payment.full_id)],
                 code=payment.full_id,
             ),
             "amount": self._decimal_to_int(payment.amount),
