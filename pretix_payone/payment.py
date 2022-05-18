@@ -440,7 +440,7 @@ class PayoneMethod(BasePaymentProvider):
             d["country"] = guess_country(self.event) or "DE"
 
         if ia.vat_id and ia.vat_id_validated:
-            d["vatid"] = ia.vatid
+            d["vatid"] = ia.vat_id
 
         if self.invoice_address_mandatory:
             if ia.name_parts.get("salutation"):
