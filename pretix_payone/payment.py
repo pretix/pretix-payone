@@ -284,6 +284,9 @@ class PayoneMethod(BasePaymentProvider):
             "solution_version": __version__,
         }
 
+    def matching_id(self, payment: OrderPayment):
+        return payment.info_data.get("TxId", None)
+
     def execute_refund(self, refund: OrderRefund):
         refund_params = {
             "request": "refund",
