@@ -23,7 +23,7 @@ from pretix.base.settings import SettingsSandbox
 from pretix.helpers.countries import CachedCountries
 from pretix.helpers.urls import build_absolute_uri as build_global_uri
 from pretix.multidomain.urlreverse import build_absolute_uri
-from requests import HTTPError
+from requests import HTTPError, RequestException
 
 from pretix_payone.models import ReferencedPayoneObject
 
@@ -324,6 +324,18 @@ class PayoneMethod(BasePaymentProvider):
                     "with us if this problem persists."
                 )
             )
+        except RequestException as e:
+            logger.exception("PAYONE error: %s" % str(e))
+            d = {"error": True, "detail": str(e)}
+            refund.info_data = d
+            refund.state = OrderRefund.REFUND_STATE_FAILED
+            refund.save()
+            raise PaymentException(
+                _(
+                    "We had trouble communicating with our payment provider. Please try again and get in touch "
+                    "with us if this problem persists."
+                )
+            )
 
         data = req.json()
 
@@ -490,6 +502,16 @@ class PayoneMethod(BasePaymentProvider):
                 d = req.json()
             except JSONDecodeError:
                 d = {"error": True, "detail": req.text}
+            payment.fail(info=d)
+            raise PaymentException(
+                _(
+                    "We had trouble communicating with our payment provider. Please try again and get in touch "
+                    "with us if this problem persists."
+                )
+            )
+        except RequestException as e:
+            logger.exception("PAYONE error: %s" % str(e))
+            d = {"error": True, "detail": str(e)}
             payment.fail(info=d)
             raise PaymentException(
                 _(
