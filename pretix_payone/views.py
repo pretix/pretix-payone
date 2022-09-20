@@ -204,7 +204,7 @@ class WebhookView(View):
             new_refund_amount = r.payment.amount - Decimal(data["receivable"])
             if new_refund_amount > existing_refund_amount:
                 r.payment.create_external_refund(
-                    new_refund_amount - existing_refund_amount, info=json.encode(data)
+                    new_refund_amount - existing_refund_amount, info=json.dumps(data)
                 )
 
         return HttpResponse("TSOK", status=200)
