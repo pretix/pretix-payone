@@ -255,7 +255,7 @@ msgid ""
 "to complete your payment. You will then be redirected back here to get your "
 "tickets."
 msgstr ""
-"Nachdem Sie Ihre Bestellung abgesendet haben, werden wir Sie zu unserem "
+"Nachdem Sie Ihre Bestellung abgesendet haben, werden wir Sie unserem "
 "Dienstleister umgeleitet um Ihre Zahlung abzuschließen. Danach werden Sie "
 "hier her zurückgeleitet und erhalten Ihre Tickets."
 
