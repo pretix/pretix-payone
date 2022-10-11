@@ -28,21 +28,29 @@ logger = logging.getLogger(__name__)
 @xframe_options_exempt
 def redirect_view(request, *args, **kwargs):
     try:
-        data = signing.loads(request.GET.get('data', ''), salt='safe-redirect')
+        data = signing.loads(request.GET.get("data", ""), salt="safe-redirect")
     except signing.BadSignature:
-        return HttpResponseBadRequest('Invalid parameter')
+        return HttpResponseBadRequest("Invalid parameter")
 
-    if 'go' in request.GET:
-        if 'session' in data:
-            for k, v in data['session'].items():
+    if "go" in request.GET:
+        if "session" in data:
+            for k, v in data["session"].items():
                 request.session[k] = v
-        return redirect(data['url'])
+        return redirect(data["url"])
     else:
         params = request.GET.copy()
-        params['go'] = '1'
-        r = render(request, 'pretix_payone/redirect.html', {
-            'url': build_absolute_uri(request.event, 'plugins:pretix_payone:redirect') + '?' + urllib.parse.urlencode(params),
-        })
+        params["go"] = "1"
+        r = render(
+            request,
+            "pretix_payone/redirect.html",
+            {
+                "url": build_absolute_uri(
+                    request.event, "plugins:pretix_payone:redirect"
+                )
+                + "?"
+                + urllib.parse.urlencode(params),
+            },
+        )
         r._csp_ignore = True
         return r
 
