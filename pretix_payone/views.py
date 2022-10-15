@@ -17,8 +17,7 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.csrf import csrf_exempt
 from django_scopes import scopes_disabled
 from pretix.base.models import Order, OrderPayment, OrderRefund, Quota
-from pretix.helpers.urls import build_absolute_uri
-from pretix.multidomain.urlreverse import eventreverse
+from pretix.multidomain.urlreverse import build_absolute_uri, eventreverse
 
 from pretix_payone.models import ReferencedPayoneObject
 
