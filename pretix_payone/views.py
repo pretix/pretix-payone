@@ -93,7 +93,9 @@ class ReturnView(PayoneOrderView, View):
     def get(self, request, *args, **kwargs):
         if kwargs["action"] == "error":
             with transaction.atomic():
-                p = OrderPayment.objects.select_for_update(of=OF_SELF).get(pk=self.payment.pk)
+                p = OrderPayment.objects.select_for_update(of=OF_SELF).get(
+                    pk=self.payment.pk
+                )
                 if p.state == OrderPayment.PAYMENT_STATE_CREATED:
                     self.payment.fail()
             messages.error(
@@ -103,7 +105,9 @@ class ReturnView(PayoneOrderView, View):
             return self._redirect_to_order()
         elif kwargs["action"] == "cancel":
             with transaction.atomic():
-                p = OrderPayment.objects.select_for_update(of=OF_SELF).get(pk=self.payment.pk)
+                p = OrderPayment.objects.select_for_update(of=OF_SELF).get(
+                    pk=self.payment.pk
+                )
                 if p.state == OrderPayment.PAYMENT_STATE_CREATED:
                     self.payment.state = OrderPayment.PAYMENT_STATE_CANCELED
                     self.payment.save(update_fields=["state"])
@@ -118,7 +122,9 @@ class ReturnView(PayoneOrderView, View):
             return self._redirect_to_order()
         elif kwargs["action"] == "success":
             with transaction.atomic():
-                p = OrderPayment.objects.select_for_update(of=OF_SELF).get(pk=self.payment.pk)
+                p = OrderPayment.objects.select_for_update(of=OF_SELF).get(
+                    pk=self.payment.pk
+                )
                 if p.state == OrderPayment.PAYMENT_STATE_CREATED:
                     p.state = OrderPayment.PAYMENT_STATE_PENDING
                     p.save(update_fields=["state"])

@@ -23,7 +23,6 @@ def set_default_cardtypes(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("pretix_payone", "0001_initial"),
     ]
