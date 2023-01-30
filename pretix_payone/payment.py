@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import requests
-import urllib.parse
 from collections import OrderedDict
 from django import forms
 from django.conf import settings
