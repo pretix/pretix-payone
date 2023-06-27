@@ -23,7 +23,7 @@ class PluginApp(PluginConfig):
         visible = True
         version = __version__
         category = "PAYMENT"
-        compatibility = "pretix>=4.16.0"
+        compatibility = "pretix>=4.20.0"
 
     def ready(self):
         from . import signals  # NOQA
