@@ -458,11 +458,11 @@ class PayoneMethod(BasePaymentProvider):
 
         if self.invoice_address_mandatory:
             if ia.name_parts.get("salutation"):
-                d["salutation"] = ia.get("salutation", "")[:10]
+                d["salutation"] = ia.name_parts.get("salutation", "")[:10]
             if ia.name_parts.get("title"):
-                d["title"] = ia.get("title", "")[:20]
-            if ia.address:
-                d["street"] = ia.address[:50]
+                d["title"] = ia.name_parts.get("title", "")[:20]
+            if ia.street:
+                d["street"] = ia.street[:50]
             if ia.zipcode:
                 d["zip"] = ia.zipcode[:10]
             if ia.city:
