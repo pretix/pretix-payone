@@ -36,7 +36,7 @@ cardtypes = [
     ("D", _("Diners Club/Discover")),
     ("O", _("Maestro")),
     ("U", _("UTAP/AirPlus")),
-    ("P", _("China Union Pay"))
+    ("P", _("China Union Pay")),
     # https://docs.payone.com/display/public/PLATFORM/cardtype+-+definition
 ]
 
