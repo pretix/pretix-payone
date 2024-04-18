@@ -178,8 +178,7 @@ class PayoneMethod(BasePaymentProvider):
                     "The PayOne plugin is operating in test mode. You can use one of <a {args}>many test "
                     "cards</a> to perform a transaction. No money will actually be transferred."
                 ).format(
-                    args='href="https://docs.payone.com/display/public/PLATFORM/Testdata" '
-                    'target="_blank"'
+                    args='href="https://docs.payone.com/security-risk-management/3d-secure#Specialremarks3DSecure-Testdata" target="_blank"'
                 )
             )
         return None
