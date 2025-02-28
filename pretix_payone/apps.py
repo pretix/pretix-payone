@@ -24,15 +24,13 @@ class PluginApp(PluginConfig):
 
         @property
         def description(self):
-            t = gettext_lazy(
-                "Accept payments through PAYONE (formerly BS Payone)."
-            )
+            t = gettext_lazy("Accept payments through PAYONE (formerly BS Payone).")
             t += '<div class="text text-info"><span class="fa fa-info-circle"></span> '
             t += gettext_lazy(
                 "Also referred to as the <em>Kieler Platform</em>. Use this extension, if PAYONE has provided you with "
                 "a <em>Merchant ID</em>."
             )
-            t += '</div>'
+            t += "</div>"
 
             return t
 
