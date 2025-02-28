@@ -175,7 +175,7 @@ class PayoneMethod(BasePaymentProvider):
         if self.event.testmode:
             return mark_safe(
                 _(
-                    "The PayOne plugin is operating in test mode. You can use one of <a {args}>many test "
+                    "The PAYONE plugin is operating in test mode. You can use one of <a {args}>many test "
                     "cards</a> to perform a transaction. No money will actually be transferred."
                 ).format(
                     args='href="https://docs.payone.com/security-risk-management/3d-secure#Specialremarks3DSecure-Testdata" target="_blank"'

@@ -1,4 +1,4 @@
-PayOne
+PAYONE
 ==========================
 
 This is a plugin for `pretix`_. 

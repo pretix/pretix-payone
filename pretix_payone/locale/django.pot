@@ -107,7 +107,7 @@ msgstr ""
 #: pretix_payone/payment.py:179
 #, python-brace-format
 msgid ""
-"The PayOne plugin is operating in test mode. You can use one of <a {args}"
+"The PAYONE plugin is operating in test mode. You can use one of <a {args}"
 ">many test cards</a> to perform a transaction. No money will actually be "
 "transferred."
 msgstr ""
