@@ -12,7 +12,6 @@ from django.template.loader import get_template
 from django.utils.safestring import mark_safe
 from django.utils.translation import get_language, gettext_lazy as _
 from json import JSONDecodeError
-from localflavor.generic.forms import IBANFormField
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
 from pretix.base.forms.questions import guess_country
@@ -89,7 +88,7 @@ class PayoneSettingsHolder(BasePaymentProvider):
             ("eps", _("eps")),  # ???
             ("sofort", _("SOFORT")),
             ("ideal", _("iDEAL")),
-            ("giropay", _("giropay")),
+            # ("giropay", _("giropay")),
             # disabled because they are untested
             # ("przelewy24", _("Przelewy24")),
             # ("multibanco", _("Multibanco")),
@@ -663,38 +662,9 @@ class PayoneGiropay(PayoneMethod):  # untested
     onlinebanktransfertype = "GPY"
     onlinebanktransfer_countries = ("DE",)
 
-    def _get_payment_params(self, request, payment):
-        d = super()._get_payment_params(request, payment)
-        d["iban"] = request.session["payment_payone_giropay_iban"]
-        return d
-
-    @property
-    def payment_form_fields(self):
-        return OrderedDict(
-            [
-                (
-                    "iban",
-                    IBANFormField(
-                        label=_("IBAN"),
-                        include_countries=["DE"],
-                        help_text=_("Please enter a german IBAN starting with DE"),
-                    ),
-                ),
-            ]
-        )
-
-    def checkout_prepare(self, request, cart):
-        form = self.payment_form(request)
-        if form.is_valid():
-            request.session["payment_payone_giropay_iban"] = form.cleaned_data["iban"]
-            return super().checkout_prepare(request, cart)
+    def is_allowed(self, request, total) -> bool:
+        # giropay no longer exists
         return False
-
-    def payment_is_valid_session(self, request):
-        return (
-            super().payment_is_valid_session(request)
-            and request.session.get("payment_payone_giropay_iban", "") != ""
-        )
 
 
 class PayoneEPS(PayoneMethod):
