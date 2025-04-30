@@ -89,8 +89,8 @@ class PayoneSettingsHolder(BasePaymentProvider):
                     label=_("Reference postfix"),
                     help_text=_(
                         "Any value entered here will be added behind the regular booking reference "
-                        "containing the order number. The postfix will be preserved as much as possible, "
-                        "should the reference exceed the allowed length. By default, the event name is used."
+                        "containing the order number. If the reference exceeds the allowed length (20 characters for "
+                        "most payment methods), the postfix may be truncated. By default, the event name is used."
                     ),
                     required=False,
                 ),
