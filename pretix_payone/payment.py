@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import re
 import requests
 from collections import OrderedDict
 from django import forms
@@ -79,6 +80,18 @@ class PayoneSettingsHolder(BasePaymentProvider):
                 SecretKeySettingsField(
                     label=_("Key"),
                     required=True,
+                ),
+            ),
+            (
+                "reference_postfix",
+                forms.CharField(
+                    label=_("Reference postfix"),
+                    help_text=_(
+                        "Any value entered here will be added behind the regular booking reference "
+                        "containing the order number. If the reference exceeds the allowed length (20 characters for "
+                        "most payment methods), the postfix may be truncated. By default, the event name is used."
+                    ),
+                    required=False,
                 ),
             ),
         ]
@@ -282,6 +295,7 @@ class PayoneMethod(BasePaymentProvider):
         return payment.info_data.get("TxId", None)
 
     def execute_refund(self, refund: OrderRefund):
+        postfix = self.settings.get("reference_postfix") or str(self.event.name)
         refund_params = {
             "request": "refund",
             "txid": refund.payment.info_data.get("TxId"),
@@ -289,10 +303,10 @@ class PayoneMethod(BasePaymentProvider):
             + 1,
             "amount": self._decimal_to_int(refund.amount) * -1,
             "currency": self.event.currency,
-            "narrative_text": "{code} {event}".format(
-                code=refund.order.code,
-                event=str(self.event.name)[: 81 - 1 - len(refund.order.code)],
-            ),
+            "narrative_text": "{code} {postfix}".format(
+                code=refund.full_id,
+                postfix=postfix,
+            )[:81],
             "transaction_param": f"{self.event.slug}-{refund.full_id}",
         }
         data = dict(**refund_params, **self._default_params)
@@ -359,19 +373,23 @@ class PayoneMethod(BasePaymentProvider):
         return int(amount * 10**places)
 
     def _get_payment_params(self, request, payment):
+        postfix = self.settings.get("reference_postfix") or str(self.event.name)
         d = {
             "request": "authorization",
-            "reference": "{ev}-{code}".format(
-                ev=self.event.slug[: 20 - 1 - len(payment.full_id)],
-                code=payment.full_id,
-            ),
+            # Character set and length as per https://docs.payone.com/information/glossary and own testing
+            "reference": re.sub(
+                "[^0-9a-zA-Z._/-]",
+                "-",
+                "{code} {postfix}".format(code=payment.full_id, postfix=postfix)
+                .strip()
+                .replace(" ", "_"),
+            )[:20],
             "amount": self._decimal_to_int(payment.amount),
             "currency": self.event.currency,
             "param": f"{self.event.slug}-{payment.full_id}",
-            "narrative_text": "{code} {event}".format(
-                code=payment.order.code,
-                event=str(self.event.name)[: 81 - 1 - len(payment.order.code)],
-            ),
+            "narrative_text": "{code} {postfix}".format(
+                code=payment.full_id, postfix=postfix
+            ).strip()[:81],
             "customer_is_present": "yes",
             "recurrence": "none",
             "clearingtype": self.clearingtype,
