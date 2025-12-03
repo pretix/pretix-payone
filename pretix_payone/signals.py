@@ -28,6 +28,7 @@ def register_payment_provider(sender, **kwargs):
         PayoneSettingsHolder,
         PayoneSofort,
         PayoneVerkkopankki,
+        PayoneWero,
     )
 
     return [
@@ -47,6 +48,7 @@ def register_payment_provider(sender, **kwargs):
         PayoneMyBank,
         PayonePrzelewy24,
         PayoneSofort,
+        PayoneWero,
     ]
 
 

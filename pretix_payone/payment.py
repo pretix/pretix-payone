@@ -101,6 +101,7 @@ class PayoneSettingsHolder(BasePaymentProvider):
             ("eps", _("eps")),  # ???
             ("sofort", _("SOFORT")),
             ("ideal", _("iDEAL")),
+            ("wero", _("WERO")),
             # ("giropay", _("giropay")),
             # disabled because they are untested
             # ("przelewy24", _("Przelewy24")),
@@ -949,6 +950,14 @@ class PayoneQiwi(PayoneMethod):
     public_name = _("Qiwi")
     clearingtype = "wlt"
     wallettype = "QIW"
+
+
+class PayoneWero(PayoneMethod):
+    method = "wero"
+    verbose_name = _("WERO via PAYONE")
+    public_name = _("WERO")
+    clearingtype = "wlt"
+    wallettype = "WRO"
 
 
 """
