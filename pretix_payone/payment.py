@@ -2,10 +2,9 @@ import hashlib
 import json
 import logging
 import re
-from decimal import Decimal
-
 import requests
 from collections import OrderedDict
+from decimal import Decimal
 from django import forms
 from django.conf import settings
 from django.contrib import messages
@@ -18,7 +17,7 @@ from json import JSONDecodeError
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
 from pretix.base.forms.questions import guess_country
-from pretix.base.models import Event, InvoiceAddress, OrderPayment, OrderRefund, Order
+from pretix.base.models import Event, InvoiceAddress, Order, OrderPayment, OrderRefund
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
 from pretix.helpers.countries import CachedCountries
