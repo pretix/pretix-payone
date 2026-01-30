@@ -2,6 +2,8 @@ import hashlib
 import json
 import logging
 import re
+from decimal import Decimal
+
 import requests
 from collections import OrderedDict
 from django import forms
@@ -16,7 +18,7 @@ from json import JSONDecodeError
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
 from pretix.base.forms.questions import guess_country
-from pretix.base.models import Event, InvoiceAddress, OrderPayment, OrderRefund
+from pretix.base.models import Event, InvoiceAddress, OrderPayment, OrderRefund, Order
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
 from pretix.helpers.countries import CachedCountries
@@ -99,10 +101,8 @@ class PayoneSettingsHolder(BasePaymentProvider):
             ("creditcard", _("Credit card")),
             ("paypal", _("PayPal")),
             ("eps", _("eps")),  # ???
-            ("sofort", _("SOFORT")),
             ("ideal", _("iDEAL")),
             ("wero", _("WERO")),
-            # ("giropay", _("giropay")),
             # disabled because they are untested
             # ("przelewy24", _("Przelewy24")),
             # ("multibanco", _("Multibanco")),
@@ -110,9 +110,12 @@ class PayoneSettingsHolder(BasePaymentProvider):
             # ("vkp", _("Verkkopankki")),
             # ("mybank", _("MyBank")),
             # ("alipay", _("Alipay")),
-            # ("paydirekt", _("paydirekt")),
             # ("paysafecard", _("paysafecard")),
             # ("qiwi", _("Qiwi")),
+            # Retired
+            # ("sofort", _("SOFORT")),
+            # ("giropay", _("giropay")),
+            # ("paydirekt", _("paydirekt")),
             # more: https://docs.payone.com/display/public/PLATFORM/General+information
         ]
         d = OrderedDict(
@@ -585,6 +588,14 @@ class PayoneMethod(BasePaymentProvider):
             return str(url)
 
 
+class RetiredMethodMixin:
+    def is_allowed(self, request: HttpRequest, total: Decimal = None) -> bool:
+        return False
+
+    def order_change_allowed(self, order: Order) -> bool:
+        return False
+
+
 class PayoneCC(PayoneMethod):
     method = "creditcard"
     verbose_name = _("Credit card via PAYONE")
@@ -673,17 +684,13 @@ class PayoneCC(PayoneMethod):
         return template.render(ctx)
 
 
-class PayoneGiropay(PayoneMethod):  # untested
+class PayoneGiropay(RetiredMethodMixin, PayoneMethod):  # untested
     method = "giropay"
     verbose_name = _("giropay via PAYONE")
     public_name = _("giropay")
     clearingtype = "sb"
     onlinebanktransfertype = "GPY"
     onlinebanktransfer_countries = ("DE",)
-
-    def is_allowed(self, request, total) -> bool:
-        # giropay no longer exists
-        return False
 
 
 class PayoneEPS(PayoneMethod):
@@ -803,7 +810,7 @@ class PayoneIdeal(PayoneMethod):
         )
 
 
-class PayoneSofort(PayoneMethod):
+class PayoneSofort(RetiredMethodMixin, PayoneMethod):
     method = "sofort"
     verbose_name = _("SOFORT via PAYONE")
     public_name = _("SOFORT")
@@ -921,7 +928,7 @@ class PayoneAlipay(PayoneMethod):
         return False
 
 
-class PayonePaydirekt(PayoneMethod):
+class PayonePaydirekt(RetiredMethodMixin, PayoneMethod):
     method = "paydirekt"
     verbose_name = _("paydirekt via PAYONE")
     public_name = _("paydirekt")
