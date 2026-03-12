@@ -762,7 +762,7 @@ class PayoneEPS(PayoneMethod):
 class PayoneIdeal(PayoneMethod):
     method = "ideal"
     verbose_name = _("iDEAL via PAYONE")
-    public_name = _("iDEAL")
+    public_name = _("iDEAL | Wero")
     clearingtype = "sb"
     onlinebanktransfertype = "IDL"
     onlinebanktransfer_countries = ("NL",)
