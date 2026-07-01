@@ -28,14 +28,18 @@ logger = logging.getLogger(__name__)
 @xframe_options_exempt
 def redirect_view(request, *args, **kwargs):
     try:
-        data = signing.loads(request.GET.get("data", ""), salt="safe-redirect")
+        data = signing.loads(
+            request.GET.get("data", ""),
+            salt="plugins:payone:redirect:safe-redirect-data",
+        )
     except signing.BadSignature:
         return HttpResponseBadRequest("Invalid parameter")
 
     if "go" in request.GET:
         if "session" in data:
             for k, v in data["session"].items():
-                request.session[k] = v
+                if k.startswith("payment_payone_"):
+                    request.session[k] = v
         return redirect(data["url"])
     else:
         params = request.GET.copy()
