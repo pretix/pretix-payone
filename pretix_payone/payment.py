@@ -580,7 +580,7 @@ class PayoneMethod(BasePaymentProvider):
                             ],
                         },
                     },
-                    salt="safe-redirect",
+                    salt="plugins:payone:redirect:safe-redirect-data",
                 )
             )
         else:
