@@ -187,6 +187,8 @@ class WebhookView(View):
             return HttpResponse("Invalid testmode usage", status=403)
 
         data = {k: request.POST.get(k) for k in request.POST.keys() if k != "key"}
+        if not data.get("txaction"):
+            return HttpResponseBadRequest("Missing transaction action")
 
         r.order.log_action(
             f'pretix_payone.event.{data["txaction"]}',
@@ -207,29 +209,15 @@ class WebhookView(View):
             return self._process_locked_payment(payment, provider, data)
 
     def _process_locked_payment(self, payment, provider, data):
-        payment_info = payment.info_data
-        payment_info["TransactionStatus"] = {
-            "TxAction": data["txaction"],
-            "Status": data.get("transaction_status"),
-            "ReasonCode": data.get("reasoncode"),
-            "SequenceNumber": data.get("sequencenumber"),
-        }
-        if "sequencenumber" in data:
-            payment_info["sequencenumber"] = data["sequencenumber"]
-        payment.info_data = payment_info
-        payment.save(update_fields=["info"])
-
+        txaction = data.get("txaction")
+        if not txaction:
+            return HttpResponseBadRequest("Missing transaction action")
         transaction_status = (data.get("transaction_status") or "").lower()
         if transaction_status not in ("", "pending", "completed"):
             return HttpResponseBadRequest("Invalid transaction status")
-        if transaction_status == "pending":
-            if (
-                data["txaction"] in ("capture", "paid", "appointed")
-                and payment.state == OrderPayment.PAYMENT_STATE_CREATED
-            ):
-                payment.state = OrderPayment.PAYMENT_STATE_PENDING
-                payment.save(update_fields=["state"])
-            return HttpResponse("TSOK", status=200)
+        sequence_number = self._sequence_number(data.get("sequencenumber"))
+        if sequence_number is None:
+            return HttpResponseBadRequest("Invalid sequence number")
 
         balance = None
         if data.get("balance") not in (None, ""):
@@ -237,15 +225,71 @@ class WebhookView(View):
                 balance = Decimal(data["balance"])
             except (ArithmeticError, ValueError):
                 return HttpResponseBadRequest("Invalid balance")
+            if not balance.is_finite():
+                return HttpResponseBadRequest("Invalid balance")
 
-        if data["txaction"] == "failed":
-            payment.fail(info=payment_info, log_data=data)
-        elif data["txaction"] in ("capture", "paid", "appointed"):
-            is_paid = (
-                (
-                    data["txaction"] == "appointed"
-                    and provider.consider_appointed_as_paid
+        receivable = None
+        if txaction in ("refund", "cancelation") and transaction_status != "pending":
+            try:
+                receivable = Decimal(data["receivable"])
+            except (ArithmeticError, KeyError, TypeError, ValueError):
+                return HttpResponseBadRequest("Invalid receivable")
+            if (
+                not receivable.is_finite()
+                or receivable < Decimal("0.00")
+                or receivable > payment.amount
+            ):
+                return HttpResponseBadRequest("Invalid receivable")
+
+        payment_info = payment.info_data
+        payment_info["TransactionStatus"] = {
+            "TxAction": txaction,
+            "Status": data.get("transaction_status"),
+            "ReasonCode": data.get("reasoncode"),
+            "SequenceNumber": data.get("sequencenumber"),
+        }
+        current_sequence_number = self._sequence_number(
+            payment_info.get("sequencenumber", "0")
+        )
+        payment_info["sequencenumber"] = str(
+            max(current_sequence_number or 0, sequence_number)
+        )
+        payment.info_data = payment_info
+        payment.save(update_fields=["info"])
+
+        if transaction_status == "pending":
+            if (
+                txaction in ("capture", "paid", "appointed")
+                and payment.state == OrderPayment.PAYMENT_STATE_CREATED
+            ):
+                payment.state = OrderPayment.PAYMENT_STATE_PENDING
+                payment.save(update_fields=["state"])
+            return HttpResponse("TSOK", status=200)
+
+        if txaction == "failed":
+            refund = self._refund_for_sequence(payment, sequence_number)
+            if refund and refund.state in (
+                OrderRefund.REFUND_STATE_CREATED,
+                OrderRefund.REFUND_STATE_TRANSIT,
+            ):
+                refund_info = refund.info_data
+                refund_info["TransactionStatus"] = payment_info["TransactionStatus"]
+                refund.info_data = refund_info
+                refund.state = OrderRefund.REFUND_STATE_FAILED
+                refund.save(update_fields=["info", "state"])
+                refund.order.log_action(
+                    "pretix.event.order.refund.failed",
+                    {
+                        "local_id": refund.local_id,
+                        "provider": refund.provider,
+                        "error": data.get("errorcode") or data.get("reasoncode"),
+                    },
                 )
+            elif not refund:
+                payment.fail(info=payment_info, log_data=data)
+        elif txaction in ("capture", "paid", "appointed"):
+            is_paid = (
+                (txaction == "appointed" and provider.consider_appointed_as_paid)
                 or balance is not None
                 and balance <= Decimal("0.00")
             )
@@ -261,20 +305,46 @@ class WebhookView(View):
                     payment.confirm()
                 except Quota.QuotaExceededException:
                     pass
-        elif data["txaction"] in ("refund", "cancelation"):
+        elif txaction in ("refund", "cancelation"):
+            refund = self._refund_for_sequence(payment, sequence_number)
+            if refund and refund.state in (
+                OrderRefund.REFUND_STATE_CREATED,
+                OrderRefund.REFUND_STATE_TRANSIT,
+            ):
+                refund_info = refund.info_data
+                refund_info["TransactionStatus"] = payment_info["TransactionStatus"]
+                refund.info_data = refund_info
+                refund.save(update_fields=["info"])
+                refund.done()
+                return HttpResponse("TSOK", status=200)
+
             existing_refund_amount = payment.refunds.exclude(
                 state__in=(
                     OrderRefund.REFUND_STATE_CANCELED,
                     OrderRefund.REFUND_STATE_FAILED,
                 )
             ).aggregate(a=Sum("amount"))["a"] or Decimal("0.00")
-            new_refund_amount = payment.amount - Decimal(data["receivable"])
+            new_refund_amount = payment.amount - receivable
             if new_refund_amount > existing_refund_amount:
                 payment.create_external_refund(
                     new_refund_amount - existing_refund_amount, info=json.dumps(data)
                 )
 
         return HttpResponse("TSOK", status=200)
+
+    @staticmethod
+    def _refund_for_sequence(payment, sequence_number):
+        for refund in payment.refunds.select_for_update().all():
+            if str(refund.info_data.get("sequencenumber", "")) == str(sequence_number):
+                return refund
+
+    @staticmethod
+    def _sequence_number(value):
+        try:
+            sequence_number = int(value)
+        except (TypeError, ValueError):
+            return None
+        return sequence_number if 0 <= sequence_number <= 127 else None
 
     @cached_property
     def payment(self):

@@ -72,6 +72,19 @@ def return_path(env, action):
     )
 
 
+def create_refund(env, amount=Decimal("5.00")):
+    with scopes_disabled():
+        return OrderRefund.objects.create(
+            order=env["order"],
+            payment=env["payment"],
+            provider=env["payment"].provider,
+            source=OrderRefund.REFUND_SOURCE_ADMIN,
+            state=OrderRefund.REFUND_STATE_CREATED,
+            amount=amount,
+            info="{}",
+        )
+
+
 @pytest.mark.django_db
 def test_wero_request_contains_required_parameters(payone_env):
     env = payone_env
@@ -581,6 +594,263 @@ def test_wero_partial_refund_uses_next_sequence_number(payone_env, monkeypatch):
     assert captured["amount"] == -500
     assert captured["currency"] == "EUR"
     assert env["payment"].info_data["sequencenumber"] == 5
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("payload", "expected_state", "raises"),
+    [
+        (
+            {"Status": "APPROVED", "TxId": "345678901"},
+            OrderRefund.REFUND_STATE_DONE,
+            False,
+        ),
+        (
+            {"Status": "PENDING", "TxId": "345678901"},
+            OrderRefund.REFUND_STATE_TRANSIT,
+            False,
+        ),
+        (
+            {"Status": "ERROR", "Error": {"ErrorMessage": "Denied"}},
+            OrderRefund.REFUND_STATE_FAILED,
+            True,
+        ),
+        (
+            {"Status": "UNKNOWN"},
+            OrderRefund.REFUND_STATE_FAILED,
+            True,
+        ),
+    ],
+)
+def test_refund_response_lifecycle(
+    payone_env, monkeypatch, payload, expected_state, raises
+):
+    env = payone_env
+    env["payment"].state = OrderPayment.PAYMENT_STATE_CONFIRMED
+    env["payment"].info_data = {"TxId": env["reference"].txid, "sequencenumber": "4"}
+    env["payment"].save(update_fields=["state", "info"])
+    refund = create_refund(env)
+    monkeypatch.setattr(
+        "pretix_payone.payment.requests.post",
+        lambda *args, **kwargs: FakeResponse(payload),
+    )
+
+    with scopes_disabled():
+        if raises:
+            with pytest.raises(PaymentException):
+                env["provider"].execute_refund(refund)
+        else:
+            env["provider"].execute_refund(refund)
+
+    refund.refresh_from_db()
+    env["payment"].refresh_from_db()
+    assert refund.state == expected_state
+    assert refund.info_data["sequencenumber"] == 5
+    if not raises:
+        assert env["payment"].info_data["sequencenumber"] == 5
+
+
+@pytest.mark.django_db
+def test_pending_refund_is_completed_by_matching_callback(
+    payone_env, monkeypatch, client
+):
+    env = payone_env
+    env["payment"].state = OrderPayment.PAYMENT_STATE_CONFIRMED
+    env["payment"].info_data = {"TxId": env["reference"].txid, "sequencenumber": "4"}
+    env["payment"].save(update_fields=["state", "info"])
+    refund = create_refund(env)
+    monkeypatch.setattr(
+        "pretix_payone.payment.requests.post",
+        lambda *args, **kwargs: FakeResponse({"Status": "PENDING"}),
+    )
+
+    with scopes_disabled():
+        env["provider"].execute_refund(refund)
+    refund.refresh_from_db()
+    assert refund.state == OrderRefund.REFUND_STATE_TRANSIT
+
+    response = post_webhook(
+        client,
+        env,
+        txaction="refund",
+        transaction_status="completed",
+        sequencenumber="5",
+        receivable="8.37",
+        balance="-5.00",
+    )
+    assert response.status_code == 200
+    refund.refresh_from_db()
+    assert refund.state == OrderRefund.REFUND_STATE_DONE
+    assert refund.info_data["TransactionStatus"]["TxAction"] == "refund"
+
+    response = post_webhook(
+        client,
+        env,
+        txaction="refund",
+        transaction_status="completed",
+        sequencenumber="5",
+        receivable="8.37",
+        balance="-5.00",
+    )
+    assert response.status_code == 200
+    with scopes_disabled():
+        assert env["payment"].refunds.count() == 1
+
+
+@pytest.mark.django_db
+def test_failed_refund_callback_does_not_fail_payment(payone_env, monkeypatch, client):
+    env = payone_env
+    env["payment"].state = OrderPayment.PAYMENT_STATE_CONFIRMED
+    env["payment"].info_data = {"TxId": env["reference"].txid, "sequencenumber": "4"}
+    env["payment"].save(update_fields=["state", "info"])
+    refund = create_refund(env)
+    monkeypatch.setattr(
+        "pretix_payone.payment.requests.post",
+        lambda *args, **kwargs: FakeResponse({"Status": "PENDING"}),
+    )
+    with scopes_disabled():
+        env["provider"].execute_refund(refund)
+
+    response = post_webhook(
+        client,
+        env,
+        txaction="failed",
+        transaction_status="completed",
+        sequencenumber="5",
+        balance="",
+    )
+    assert response.status_code == 200
+    refund.refresh_from_db()
+    env["payment"].refresh_from_db()
+    assert refund.state == OrderRefund.REFUND_STATE_FAILED
+    assert env["payment"].state == OrderPayment.PAYMENT_STATE_CONFIRMED
+
+
+@pytest.mark.django_db
+def test_multiple_pending_refunds_are_matched_by_sequence_number(
+    payone_env, monkeypatch, client
+):
+    env = payone_env
+    env["payment"].state = OrderPayment.PAYMENT_STATE_CONFIRMED
+    env["payment"].info_data = {"TxId": env["reference"].txid, "sequencenumber": "4"}
+    env["payment"].save(update_fields=["state", "info"])
+    first_refund = create_refund(env)
+    second_refund = create_refund(env)
+    monkeypatch.setattr(
+        "pretix_payone.payment.requests.post",
+        lambda *args, **kwargs: FakeResponse({"Status": "PENDING"}),
+    )
+
+    with scopes_disabled():
+        env["provider"].execute_refund(first_refund)
+        env["provider"].execute_refund(second_refund)
+
+    response = post_webhook(
+        client,
+        env,
+        txaction="refund",
+        transaction_status="completed",
+        sequencenumber="6",
+        receivable="8.37",
+        balance="-5.00",
+    )
+    assert response.status_code == 200
+    first_refund.refresh_from_db()
+    second_refund.refresh_from_db()
+    assert first_refund.state == OrderRefund.REFUND_STATE_TRANSIT
+    assert second_refund.state == OrderRefund.REFUND_STATE_DONE
+
+    response = post_webhook(
+        client,
+        env,
+        txaction="refund",
+        transaction_status="completed",
+        sequencenumber="5",
+        receivable="3.37",
+        balance="-10.00",
+    )
+    assert response.status_code == 200
+    first_refund.refresh_from_db()
+    assert first_refund.state == OrderRefund.REFUND_STATE_DONE
+    env["payment"].refresh_from_db()
+    assert env["payment"].info_data["sequencenumber"] == "6"
+
+    third_refund = create_refund(env)
+    with scopes_disabled():
+        env["provider"].execute_refund(third_refund)
+    third_refund.refresh_from_db()
+    assert third_refund.info_data["sequencenumber"] == 7
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("receivable", [None, "invalid", "NaN", "-0.01", "13.38"])
+def test_completed_refund_callback_rejects_invalid_receivable(
+    payone_env, client, receivable
+):
+    env = payone_env
+    env["payment"].state = OrderPayment.PAYMENT_STATE_CONFIRMED
+    env["payment"].save(update_fields=["state"])
+
+    response = post_webhook(
+        client,
+        env,
+        txaction="refund",
+        transaction_status="completed",
+        receivable=receivable,
+    )
+    assert response.status_code == 400
+    env["payment"].refresh_from_db()
+    assert env["payment"].info_data == {}
+    with scopes_disabled():
+        assert env["payment"].refunds.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("sequence_number", [None, "invalid", "-1", "128"])
+def test_completed_refund_callback_rejects_invalid_sequence_number(
+    payone_env, client, sequence_number
+):
+    env = payone_env
+    env["payment"].state = OrderPayment.PAYMENT_STATE_CONFIRMED
+    env["payment"].save(update_fields=["state"])
+
+    response = post_webhook(
+        client,
+        env,
+        txaction="refund",
+        transaction_status="completed",
+        sequencenumber=sequence_number,
+        receivable="8.37",
+    )
+    assert response.status_code == 400
+    env["payment"].refresh_from_db()
+    assert env["payment"].info_data == {}
+    with scopes_disabled():
+        assert env["payment"].refunds.count() == 0
+
+
+@pytest.mark.django_db
+def test_refund_rejects_corrupt_payment_sequence_number(payone_env, monkeypatch):
+    env = payone_env
+    env["payment"].state = OrderPayment.PAYMENT_STATE_CONFIRMED
+    env["payment"].info_data = {
+        "TxId": env["reference"].txid,
+        "sequencenumber": "invalid",
+    }
+    env["payment"].save(update_fields=["state", "info"])
+    refund = create_refund(env)
+    monkeypatch.setattr(
+        "pretix_payone.payment.requests.post",
+        lambda *args, **kwargs: pytest.fail("PAYONE must not be called"),
+    )
+
+    with scopes_disabled():
+        with pytest.raises(PaymentException):
+            env["provider"].execute_refund(refund)
+
+    refund.refresh_from_db()
+    assert refund.state == OrderRefund.REFUND_STATE_FAILED
+    assert refund.info_data["error"]
 
 
 @pytest.mark.django_db

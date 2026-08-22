@@ -9,6 +9,7 @@ from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.core import signing
+from django.db import transaction
 from django.http import HttpRequest
 from django.template.loader import get_template
 from django.utils.safestring import mark_safe
@@ -20,6 +21,7 @@ from pretix.base.forms.questions import guess_country
 from pretix.base.models import Event, InvoiceAddress, Order, OrderPayment, OrderRefund
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
+from pretix.helpers import OF_SELF
 from pretix.helpers.countries import CachedCountries
 from pretix.helpers.urls import build_absolute_uri as build_global_uri
 from pretix.multidomain.urlreverse import build_absolute_uri
@@ -297,74 +299,116 @@ class PayoneMethod(BasePaymentProvider):
         return payment.info_data.get("TxId", None)
 
     def execute_refund(self, refund: OrderRefund):
-        postfix = self.settings.get("reference_postfix") or str(self.event.name)
-        refund_params = {
-            "request": "refund",
-            "txid": refund.payment.info_data.get("TxId"),
-            "sequencenumber": int(refund.payment.info_data.get("sequencenumber", "0"))
-            + 1,
-            "amount": self._decimal_to_int(refund.amount) * -1,
-            "currency": self.event.currency,
-            "narrative_text": "{code} {postfix}".format(
-                code=refund.full_id,
-                postfix=postfix,
-            )[:81],
-            "transaction_param": f"{self.event.slug}-{refund.full_id}",
-        }
-        data = dict(**refund_params, **self._default_params(refund.order.testmode))
-        try:
-            req = requests.post(
-                "https://api.pay1.de/post-gateway/",
-                data=data,
-                headers={"Accept": "application/json"},
+        error = None
+        with transaction.atomic():
+            payment = OrderPayment.objects.select_for_update(of=OF_SELF).get(
+                pk=refund.payment_id
             )
-            req.raise_for_status()
-        except HTTPError:
-            logger.exception("PAYONE error: %s" % req.text)
             try:
-                d = req.json()
-            except JSONDecodeError:
-                d = {"error": True, "detail": req.text}
-            refund.info_data = d
-            refund.state = OrderRefund.REFUND_STATE_FAILED
-            refund.save()
-            raise PaymentException(
-                _(
-                    "We had trouble communicating with our payment provider. Please try again and get in touch "
-                    "with us if this problem persists."
+                current_sequence_number = int(
+                    payment.info_data.get("sequencenumber", "0")
                 )
-            )
-        except RequestException as e:
-            logger.exception("PAYONE error: %s" % str(e))
-            d = {"error": True, "detail": str(e)}
-            refund.info_data = d
-            refund.state = OrderRefund.REFUND_STATE_FAILED
-            refund.save()
-            raise PaymentException(
-                _(
-                    "We had trouble communicating with our payment provider. Please try again and get in touch "
-                    "with us if this problem persists."
+                if not 0 <= current_sequence_number < 127:
+                    raise ValueError
+            except (TypeError, ValueError):
+                refund.info_data = {
+                    "error": True,
+                    "detail": "Invalid PAYONE sequence number on the original payment.",
+                }
+                refund.state = OrderRefund.REFUND_STATE_FAILED
+                refund.save()
+                error = PaymentException(
+                    _(
+                        "We had trouble communicating with our payment provider. Please get in touch "
+                        "with us if this problem persists."
+                    )
                 )
-            )
+            else:
+                sequence_number = current_sequence_number + 1
+                postfix = self.settings.get("reference_postfix") or str(self.event.name)
+                refund_params = {
+                    "request": "refund",
+                    "txid": payment.info_data.get("TxId"),
+                    "sequencenumber": sequence_number,
+                    "amount": self._decimal_to_int(refund.amount) * -1,
+                    "currency": self.event.currency,
+                    "narrative_text": "{code} {postfix}".format(
+                        code=refund.full_id,
+                        postfix=postfix,
+                    )[:81],
+                    "transaction_param": f"{self.event.slug}-{refund.full_id}",
+                }
+                data = dict(
+                    **refund_params, **self._default_params(refund.order.testmode)
+                )
+                try:
+                    req = requests.post(
+                        "https://api.pay1.de/post-gateway/",
+                        data=data,
+                        headers={"Accept": "application/json"},
+                    )
+                    req.raise_for_status()
+                except HTTPError:
+                    logger.exception("PAYONE error: %s" % req.text)
+                    try:
+                        response_data = req.json()
+                    except JSONDecodeError:
+                        response_data = {"error": True, "detail": req.text}
+                    response_data["sequencenumber"] = sequence_number
+                    refund.info_data = response_data
+                    refund.state = OrderRefund.REFUND_STATE_FAILED
+                    refund.save()
+                    error = PaymentException(
+                        _(
+                            "We had trouble communicating with our payment provider. Please try again and get in touch "
+                            "with us if this problem persists."
+                        )
+                    )
+                except RequestException as e:
+                    logger.exception("PAYONE error: %s" % str(e))
+                    refund.info_data = {
+                        "error": True,
+                        "detail": str(e),
+                        "sequencenumber": sequence_number,
+                    }
+                    refund.state = OrderRefund.REFUND_STATE_FAILED
+                    refund.save()
+                    error = PaymentException(
+                        _(
+                            "We had trouble communicating with our payment provider. Please try again and get in touch "
+                            "with us if this problem persists."
+                        )
+                    )
+                else:
+                    response_data = req.json()
+                    response_data["sequencenumber"] = sequence_number
+                    refund.info_data = response_data
+                    refund.save(update_fields=["info"])
 
-        data = req.json()
+                    status = response_data.get("Status")
+                    if status in ("APPROVED", "PENDING"):
+                        payment_info = payment.info_data
+                        payment_info["sequencenumber"] = sequence_number
+                        payment.info_data = payment_info
+                        payment.save(update_fields=["info"])
 
-        if data["Status"] != "ERROR":
-            d = refund.payment.info_data
-            d["sequencenumber"] = refund_params["sequencenumber"]
-            refund.payment.info = json.dumps(d)
-            refund.payment.save()
+                    if status == "APPROVED":
+                        refund.done()
+                    elif status == "PENDING":
+                        refund.state = OrderRefund.REFUND_STATE_TRANSIT
+                        refund.save(update_fields=["state"])
+                    else:
+                        refund.state = OrderRefund.REFUND_STATE_FAILED
+                        refund.save(update_fields=["state"])
+                        error = PaymentException(
+                            response_data.get("Error", {}).get(
+                                "ErrorMessage",
+                                response_data.get("ErrorMessage", "Unknown error"),
+                            )
+                        )
 
-        refund.info = json.dumps(data)
-
-        if data["Status"] == "APPROVED":
-            refund.done()
-        elif data["Status"] == "PENDING":
-            refund.done()  # not technically correct, but we're not sure we'd ever get an udpate.
-        elif data["Status"] == "ERROR":
-            refund.state = OrderRefund.REFUND_STATE_FAILED
-            refund.save()
-            raise PaymentException(data["Error"].get("ErrorMessage", "Unknown error"))
+        if error:
+            raise error
 
     def _amount_to_decimal(self, cents):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)

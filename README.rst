@@ -13,6 +13,8 @@ PAYONE payment portal. For WERO, configure ``Notify Version 7.6`` and enable
 ``TransactionStatus Failed`` notifications. pretix only marks a WERO payment
 as paid after PAYONE sends a final transaction status; browser redirects and
 ``transaction_status=pending`` notifications never confirm a payment.
+Likewise, refunds with a PAYONE ``PENDING`` response remain in transit until a
+final TransactionStatus notification confirms or fails the refund.
 
 When troubleshooting a payment, compare the PAYONE transaction ID shown on the
 pretix payment with the transaction ID in the PAYONE Merchant Interface. The
