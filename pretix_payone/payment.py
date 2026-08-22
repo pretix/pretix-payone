@@ -153,8 +153,8 @@ class PayoneSettingsHolder(BasePaymentProvider):
         return "<div class='alert alert-info'>%s<br /><code>%s</code></div>" % (
             _(
                 "Please configure the TransactionStatus URL to "
-                "the following endpoint in order to automatically cancel orders when charges are refunded externally "
-                "and to process asynchronous payment methods like SOFORT."
+                "the following endpoint in order to process asynchronous payment updates. "
+                "For WERO, use Notify Version 7.6 and enable TransactionStatus notifications for failed transactions."
             ),
             build_global_uri("plugins:pretix_payone:webhook"),
         )
@@ -969,25 +969,52 @@ class PayoneWero(PayoneMethod):
     clearingtype = "wlt"
     wallettype = "WRO"
 
+    def is_allowed(self, request: HttpRequest, total: Decimal = None) -> bool:
+        return self.event.currency == "EUR" and super().is_allowed(request, total)
 
-"""
-Test status:
+    def order_change_allowed(self, order: Order, request: HttpRequest = None) -> bool:
+        return self.event.currency == "EUR" and super().order_change_allowed(
+            order, request
+        )
 
-CC: works
-CC 3DS: works
-eps: works
-giropay: works (although only in live mode)
-SOFORT: works
-SEPA DEBIT: unimplemented
-PayPal: works
-ideal: works
-przelewy24: untested (not configured)
-bancontact: untested (not configured)
-alipay: untested (not configured)
-paydirekt: untested (not configured)
-multibanco: untested (not configured)
-bct: untested (not configured)
-mybank: untested (not configured)
-paysafecard: untested (not configured)
-qiwi: untested (not configured)
-"""
+    def _get_payment_params(self, request, payment):
+        data = super()._get_payment_params(request, payment)
+
+        # PAYONE requires a last name with at least two characters and a
+        # combined first/last name length of at least three characters for WERO.
+        if len(data.get("lastname", "").strip()) < 2:
+            data["lastname"] = "Unknown"
+        if (
+            len(
+                "{}{}".format(
+                    data.get("firstname", "").strip(),
+                    data.get("lastname", "").strip(),
+                )
+            )
+            < 3
+        ):
+            data["firstname"] = "Unknown"
+
+        return data
+
+
+# Test status:
+#
+# CC: works
+# CC 3DS: works
+# eps: works
+# giropay: works (although only in live mode)
+# SOFORT: works
+# SEPA DEBIT: unimplemented
+# PayPal: works
+# WERO: unit-tested (PAYONE simulator verification required)
+# ideal: works
+# przelewy24: untested (not configured)
+# bancontact: untested (not configured)
+# alipay: untested (not configured)
+# paydirekt: untested (not configured)
+# multibanco: untested (not configured)
+# bct: untested (not configured)
+# mybank: untested (not configured)
+# paysafecard: untested (not configured)
+# qiwi: untested (not configured)

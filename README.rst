@@ -5,6 +5,19 @@ This is a plugin for `pretix`_.
 
 Allows to process payments through PAYONE (formerly BS Payone)
 
+PAYONE configuration
+---------------------
+
+Configure the ``TransactionStatus URL`` shown in the plugin settings in your
+PAYONE payment portal. For WERO, configure ``Notify Version 7.6`` and enable
+``TransactionStatus Failed`` notifications. pretix only marks a WERO payment
+as paid after PAYONE sends a final transaction status; browser redirects and
+``transaction_status=pending`` notifications never confirm a payment.
+
+When troubleshooting a payment, compare the PAYONE transaction ID shown on the
+pretix payment with the transaction ID in the PAYONE Merchant Interface. The
+pretix order log records every received PAYONE transaction action.
+
 Development setup
 -----------------
 

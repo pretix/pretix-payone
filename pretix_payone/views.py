@@ -100,8 +100,11 @@ class ReturnView(PayoneOrderView, View):
                 p = OrderPayment.objects.select_for_update(of=OF_SELF).get(
                     pk=self.payment.pk
                 )
-                if p.state == OrderPayment.PAYMENT_STATE_CREATED:
-                    self.payment.fail()
+                if p.state in (
+                    OrderPayment.PAYMENT_STATE_CREATED,
+                    OrderPayment.PAYMENT_STATE_PENDING,
+                ):
+                    p.fail()
             messages.error(
                 self.request,
                 _("The payment process has failed. See below for more information."),
@@ -112,15 +115,18 @@ class ReturnView(PayoneOrderView, View):
                 p = OrderPayment.objects.select_for_update(of=OF_SELF).get(
                     pk=self.payment.pk
                 )
-                if p.state == OrderPayment.PAYMENT_STATE_CREATED:
-                    self.payment.state = OrderPayment.PAYMENT_STATE_CANCELED
-                    self.payment.save(update_fields=["state"])
-                    self.payment.order.log_action(
+                if p.state in (
+                    OrderPayment.PAYMENT_STATE_CREATED,
+                    OrderPayment.PAYMENT_STATE_PENDING,
+                ):
+                    p.state = OrderPayment.PAYMENT_STATE_CANCELED
+                    p.save(update_fields=["state"])
+                    p.order.log_action(
                         "pretix.event.order.payment.canceled",
                         {
-                            "local_id": self.payment.local_id,
-                            "provider": self.payment.provider,
-                            "data": self.payment.info_data,
+                            "local_id": p.local_id,
+                            "provider": p.provider,
+                            "data": p.info_data,
                         },
                     )
             return self._redirect_to_order()
@@ -176,10 +182,11 @@ class WebhookView(View):
         if pprov.settings.portalid != request.POST.get("portalid"):
             return HttpResponse("Invalid Portal ID", status=403)
 
-        if request.POST.get("mode") == "test" and not r.order.testmode:
+        expected_mode = "test" if r.order.testmode else "live"
+        if request.POST.get("mode") != expected_mode:
             return HttpResponse("Invalid testmode usage", status=403)
 
-        data = {k: request.POST.get(k) for k in request.POST.keys() if k not in ("key")}
+        data = {k: request.POST.get(k) for k in request.POST.keys() if k != "key"}
 
         r.order.log_action(
             f'pretix_payone.event.{data["txaction"]}',
@@ -189,24 +196,61 @@ class WebhookView(View):
                 "data": data,
             },
         )
-        balance = None
-        if "balance" in data:
-            balance = Decimal(data["balance"])
 
+        return self._process_transaction_status(r, pprov, data)
+
+    def _process_transaction_status(self, reference, provider, data):
+        with transaction.atomic():
+            payment = OrderPayment.objects.select_for_update(of=OF_SELF).get(
+                pk=reference.payment_id
+            )
+            return self._process_locked_payment(payment, provider, data)
+
+    def _process_locked_payment(self, payment, provider, data):
+        payment_info = payment.info_data
+        payment_info["TransactionStatus"] = {
+            "TxAction": data["txaction"],
+            "Status": data.get("transaction_status"),
+            "ReasonCode": data.get("reasoncode"),
+            "SequenceNumber": data.get("sequencenumber"),
+        }
         if "sequencenumber" in data:
-            d = r.payment.info_data
-            d["sequencenumber"] = data["sequencenumber"]
-            r.payment.info_data = d
-            r.payment.save()
+            payment_info["sequencenumber"] = data["sequencenumber"]
+        payment.info_data = payment_info
+        payment.save(update_fields=["info"])
 
-        if data["txaction"] in ("capture", "paid", "appointed"):
+        transaction_status = (data.get("transaction_status") or "").lower()
+        if transaction_status not in ("", "pending", "completed"):
+            return HttpResponseBadRequest("Invalid transaction status")
+        if transaction_status == "pending":
+            if (
+                data["txaction"] in ("capture", "paid", "appointed")
+                and payment.state == OrderPayment.PAYMENT_STATE_CREATED
+            ):
+                payment.state = OrderPayment.PAYMENT_STATE_PENDING
+                payment.save(update_fields=["state"])
+            return HttpResponse("TSOK", status=200)
+
+        balance = None
+        if data.get("balance") not in (None, ""):
+            try:
+                balance = Decimal(data["balance"])
+            except (ArithmeticError, ValueError):
+                return HttpResponseBadRequest("Invalid balance")
+
+        if data["txaction"] == "failed":
+            payment.fail(info=payment_info, log_data=data)
+        elif data["txaction"] in ("capture", "paid", "appointed"):
             is_paid = (
-                (data["txaction"] == "appointed" and pprov.consider_appointed_as_paid)
+                (
+                    data["txaction"] == "appointed"
+                    and provider.consider_appointed_as_paid
+                )
                 or balance is not None
                 and balance <= Decimal("0.00")
             )
             if (
-                r.payment.state
+                payment.state
                 not in (
                     OrderPayment.PAYMENT_STATE_CONFIRMED,
                     OrderPayment.PAYMENT_STATE_REFUNDED,
@@ -214,19 +258,19 @@ class WebhookView(View):
                 and is_paid
             ):
                 try:
-                    r.payment.confirm()
+                    payment.confirm()
                 except Quota.QuotaExceededException:
                     pass
         elif data["txaction"] in ("refund", "cancelation"):
-            existing_refund_amount = r.payment.refunds.exclude(
+            existing_refund_amount = payment.refunds.exclude(
                 state__in=(
                     OrderRefund.REFUND_STATE_CANCELED,
                     OrderRefund.REFUND_STATE_FAILED,
                 )
             ).aggregate(a=Sum("amount"))["a"] or Decimal("0.00")
-            new_refund_amount = r.payment.amount - Decimal(data["receivable"])
+            new_refund_amount = payment.amount - Decimal(data["receivable"])
             if new_refund_amount > existing_refund_amount:
-                r.payment.create_external_refund(
+                payment.create_external_refund(
                     new_refund_amount - existing_refund_amount, info=json.dumps(data)
                 )
 
