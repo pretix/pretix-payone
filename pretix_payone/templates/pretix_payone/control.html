@@ -28,5 +28,21 @@
             <dt>{% trans "Error message" %}</dt>
             <dd>{{ payment_info.Error.ErrorMessage }}</dd>
         {% endif %}
+        {% if "TransactionStatus" in payment_info %}
+            <dt>{% trans "Last transaction action" %}</dt>
+            <dd>{{ payment_info.TransactionStatus.TxAction }}</dd>
+            {% if payment_info.TransactionStatus.Status %}
+                <dt>{% trans "Transaction status" %}</dt>
+                <dd>{{ payment_info.TransactionStatus.Status }}</dd>
+            {% endif %}
+            {% if payment_info.TransactionStatus.ReasonCode %}
+                <dt>{% trans "Reason code" %}</dt>
+                <dd>{{ payment_info.TransactionStatus.ReasonCode }}</dd>
+            {% endif %}
+            {% if payment_info.TransactionStatus.SequenceNumber %}
+                <dt>{% trans "Sequence number" %}</dt>
+                <dd>{{ payment_info.TransactionStatus.SequenceNumber }}</dd>
+            {% endif %}
+        {% endif %}
     </dl>
 {% endif %}
