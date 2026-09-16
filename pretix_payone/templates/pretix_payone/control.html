@@ -24,9 +24,9 @@
         {% endif %}
         {% if "Error" in payment_info %}
             <dt>{% trans "Error code" %}</dt>
-            <dd>{{ payment_info.Error.ErrorCode }}</dd>
+            <dd>{{ payment_info.Error.ErrorCode }} - {{ payment_info.Error.ErrorMessage }}</dd>
             <dt>{% trans "Error message" %}</dt>
-            <dd>{{ payment_info.Error.ErrorMessage }}</dd>
+            <dd>{{ payment_info.Error.CustomerMessage }}</dd>
         {% endif %}
     </dl>
 {% endif %}
