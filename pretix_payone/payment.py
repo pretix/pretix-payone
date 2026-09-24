@@ -274,7 +274,6 @@ class PayoneMethod(BasePaymentProvider):
         }
         return template.render(ctx)
 
-
     def refund_control_render(self, request, refund) -> str:
         if refund.info:
             refund_info = json.loads(refund.info)
