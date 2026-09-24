@@ -274,6 +274,7 @@ class PayoneMethod(BasePaymentProvider):
         }
         return template.render(ctx)
 
+
     def refund_control_render(self, request, refund) -> str:
         if refund.info:
             refund_info = json.loads(refund.info)
@@ -293,7 +294,7 @@ class PayoneMethod(BasePaymentProvider):
         return template.render(ctx)
 
     @property
-    def _default_params(self):
+    def _default_params(self, testmode):
         from pretix import __version__
 
         from pretix_payone import __version__ as pluginver
@@ -304,7 +305,7 @@ class PayoneMethod(BasePaymentProvider):
             "portalid": self.settings.portalid,
             "key": hashlib.md5(self.settings.key.encode()).hexdigest(),
             "api_version": "3.11",
-            "mode": "test" if self.event.testmode else "live",
+            "mode": "test" if testmode else "live",
             "encoding": "UTF-8",
             "integrator_name": "rami.io GmbH",
             "integrator_version": pluginver,
@@ -330,7 +331,7 @@ class PayoneMethod(BasePaymentProvider):
             )[:81],
             "transaction_param": f"{self.event.slug}-{refund.full_id}",
         }
-        data = dict(**refund_params, **self._default_params)
+        data = dict(**refund_params, **self._default_params(refund.order.testmode))
         try:
             req = requests.post(
                 "https://api.pay1.de/post-gateway/",
@@ -520,7 +521,8 @@ class PayoneMethod(BasePaymentProvider):
 
     def execute_payment(self, request: HttpRequest, payment: OrderPayment):
         data = dict(
-            **self._get_payment_params(request, payment), **self._default_params
+            **self._get_payment_params(request, payment),
+            **self._default_params(payment.order.testmode),
         )
         try:
             req = requests.post(
@@ -606,6 +608,10 @@ class PayoneMethod(BasePaymentProvider):
 
 
 class RetiredMethodMixin:
+    @property
+    def is_enabled(self) -> bool:
+        return False
+
     def is_allowed(self, request: HttpRequest, total: Decimal = None) -> bool:
         return False
 
