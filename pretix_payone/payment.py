@@ -274,7 +274,6 @@ class PayoneMethod(BasePaymentProvider):
         }
         return template.render(ctx)
 
-
     def refund_control_render(self, request, refund) -> str:
         if refund.info:
             refund_info = json.loads(refund.info)
@@ -293,7 +292,6 @@ class PayoneMethod(BasePaymentProvider):
 
         return template.render(ctx)
 
-    @property
     def _default_params(self, testmode):
         from pretix import __version__
 
