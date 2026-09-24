@@ -274,6 +274,24 @@ class PayoneMethod(BasePaymentProvider):
         }
         return template.render(ctx)
 
+    def refund_control_render(self, request, refund) -> str:
+        if refund.info:
+            refund_info = json.loads(refund.info)
+        else:
+            refund_info = None
+        template = get_template("pretix_payone/control.html")
+        ctx = {
+            "request": request,
+            "event": self.event,
+            "settings": self.settings,
+            "payment_info": refund_info,
+            "payment": refund,
+            "method": self.method,
+            "provider": self,
+        }
+
+        return template.render(ctx)
+
     @property
     def _default_params(self):
         from pretix import __version__
