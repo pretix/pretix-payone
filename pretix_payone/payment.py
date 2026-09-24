@@ -293,7 +293,6 @@ class PayoneMethod(BasePaymentProvider):
 
         return template.render(ctx)
 
-    @property
     def _default_params(self, testmode):
         from pretix import __version__
 
